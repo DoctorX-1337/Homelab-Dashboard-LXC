@@ -32,6 +32,12 @@ def test_custom_item_rejects_credentials_and_non_http_urls():
         EditableItem(name="Datei", icon="link", url="file:///etc/passwd")
 
 
+def test_custom_logo_namespace_is_restricted():
+    assert EditableItem(name="Privat", icon="custom:mein-logo").icon == "custom:mein-logo"
+    with pytest.raises(ValidationError):
+        EditableItem(name="Pfad", icon="custom:../secret")
+
+
 def test_builtin_override_can_be_hidden_and_restored(tmp_path):
     store = CustomItemsStore()
     store.path = tmp_path / "custom-items.json"

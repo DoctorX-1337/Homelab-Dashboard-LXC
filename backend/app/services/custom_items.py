@@ -44,8 +44,8 @@ class EditableItem(BaseModel):
     @classmethod
     def clean_icon(cls, value: str) -> str:
         value = value.strip().lower()
-        if not re.fullmatch(r"[a-z0-9_-]+", value):
-            raise ValueError("Das Icon darf nur Buchstaben, Zahlen, _ und - enthalten")
+        if not re.fullmatch(r"(?:custom:)?[a-z0-9_-]+", value):
+            raise ValueError("Das Icon muss ein Standardname oder custom:<name> sein")
         return value
 
     @field_validator("url")
