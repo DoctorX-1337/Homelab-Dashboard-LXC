@@ -36,6 +36,15 @@ PY
   chmod 0640 "$STATE_FILE"
 }
 
+failure_target=""
+on_unexpected_error() {
+  local exit_code=$?
+  trap - ERR
+  write_state failed "Update unerwartet abgebrochen; Details stehen im Systemprotokoll" "$failure_target" 100 || true
+  exit "$exit_code"
+}
+trap on_unexpected_error ERR
+
 exec 9>/run/lock/homelab-dashboard-update.lock
 flock -n 9 || { echo "Eine Dashboard-Aktualisierung läuft bereits."; exit 0; }
 rm -f -- "$REQUEST_FILE"
@@ -49,13 +58,15 @@ current_version=$(tr -d '[:space:]' < "$APP_DIR/VERSION")
 write_state running "Veröffentlichte Version wird geprüft" "" 5
 
 latest_tag=$(
-  curl --fail --silent --show-error --location --connect-timeout 8 --max-time 30 \
+  curl --fail --silent --show-error --location --connect-timeout 8 --max-time 45 \
+    --retry 4 --retry-delay 3 --retry-all-errors \
     -H 'Accept: application/vnd.github+json' \
     -H 'User-Agent: Homelab-Dashboard-Manual-Update' \
     "$TAGS_API_URL" |
   python3 -c 'import json,re,sys; tags=[x["name"] for x in json.load(sys.stdin)]; valid=[(tuple(map(int,t.removeprefix("v").split("."))),t) for t in tags if re.fullmatch(r"v?\d+\.\d+\.\d+",t)]; print(max(valid)[1] if valid else "")'
 )
 latest_version=${latest_tag#v}
+failure_target=$latest_version
 [[ $latest_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
   write_state failed "Keine gültige veröffentlichte Version gefunden" "" 100
   exit 1
@@ -74,7 +85,8 @@ chmod 0755 "$work_dir/source" "$work_dir/backup"
 write_state running "Update wird heruntergeladen" "$latest_version" 15
 
 curl --fail --silent --show-error --location \
-  --proto '=https' --tlsv1.2 --connect-timeout 8 --max-time 120 \
+  --proto '=https' --tlsv1.2 --connect-timeout 8 --max-time 180 \
+  --retry 4 --retry-delay 3 --retry-all-errors \
   "$ARCHIVE_BASE_URL/$latest_tag.tar.gz" -o "$work_dir/release.tar.gz"
 tar -xzf "$work_dir/release.tar.gz" --strip-components=1 -C "$work_dir/source"
 write_state running "Download abgeschlossen, Archiv wird geprüft" "$latest_version" 28

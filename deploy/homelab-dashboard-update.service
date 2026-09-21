@@ -9,7 +9,7 @@ ExecStart=/usr/local/sbin/homelab-dashboard-manual-update
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/opt/homelab-dashboard /run/homelab-dashboard /run/lock /etc/systemd/system /usr/local/sbin
+ReadWritePaths=/opt/homelab-dashboard /run/homelab-dashboard /run/lock /etc/systemd/system /etc/nginx/sites-available /usr/local/sbin
 LockPersonality=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 Environment=HOME=/tmp

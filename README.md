@@ -4,7 +4,7 @@ Ein frei konfigurierbares Dashboard für Proxmox-Homelabs. Die React-Oberfläche
 
 ## Schnellinstallation auf Proxmox VE
 
-Der folgende Befehl wird als `root` direkt auf einem Proxmox-VE-Host ausgeführt. Das Skript zeigt seine Schritte an, erstellt einen unprivilegierten Debian-LXC und installiert das jeweils neueste veröffentlichte Dashboard-Release:
+Der folgende Befehl wird als `root` direkt auf einem Proxmox-VE-Host ausgeführt. Der farbige Installer zeigt Konfiguration, sieben Installationsphasen und den aktuellen Prozess an, erstellt einen unprivilegierten Debian-LXC und installiert das jeweils neueste veröffentlichte Dashboard-Release:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/DoctorX-1337/Homelab-Dashboard-LXC/main/deploy/pve-install.sh)"
@@ -20,6 +20,8 @@ CTID=250 MEMORY=4096 STORAGE=local-zfs BRIDGE=vmbr1 \
 Weitere Variablen: `CT_HOSTNAME`, `CORES`, `SWAP`, `DISK_SIZE`, `IP_CONFIG`, `TEMPLATE_STORAGE` und `DASHBOARD_VERSION`.
 
 Nach der Installation gibt das Skript die lokale IP-Adresse aus. Anwendungen, Hosts und Links werden unter **Einstellungen** hinzugefügt. Für Clusterwerte wird optional `/etc/homelab-dashboard.env` im Container mit einem dedizierten Proxmox-Token der Rolle `PVEAuditor` ergänzt.
+
+Das vollständige Installationsprotokoll liegt auf dem Proxmox-Host unter `/var/log/homelab-dashboard-installer-<CTID>.log`. Bei einem Fehler zeigt der Installer automatisch die letzten relevanten Logzeilen an und lässt den Container für eine sichere Diagnose unverändert bestehen.
 
 ## Datenschutz und öffentliche Standardkonfiguration
 
@@ -38,7 +40,7 @@ git grep -nEi 'token|secret|password|private[_-]?key'
 
 ## Updates
 
-Das Dashboard prüft veröffentlichte Tags im Format `vMAJOR.MINOR.PATCH`. Eine Installation startet nur nach Klick auf **Einstellungen → Dashboard-Update → Jetzt aktualisieren**. Ein dynamischer Balken zeigt die serverseitigen Phasen und den Prozentwert. Lokale Daten und die Systemkonfiguration bleiben erhalten; bei einem fehlgeschlagenen Build wird der vorherige Quellstand wiederhergestellt.
+Das Dashboard prüft veröffentlichte Tags im Format `vMAJOR.MINOR.PATCH`. Eine Installation startet nur nach Klick auf **Einstellungen → Dashboard-Update → Jetzt aktualisieren**. Ein dynamischer Balken bleibt bis zum Abschluss sichtbar; währenddessen sind Dashboard und übrige Einstellungen gesperrt und weichgezeichnet. Lokale Daten und die Systemkonfiguration bleiben erhalten; bei einem fehlgeschlagenen Build wird der vorherige Quellstand wiederhergestellt.
 
 ```bash
 systemctl status homelab-dashboard-update.path

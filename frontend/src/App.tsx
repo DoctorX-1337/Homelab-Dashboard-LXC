@@ -83,6 +83,12 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [theme, setTheme] = useState<ThemeName>('green')
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
+  const [updateLocked, setUpdateLocked] = useState(false)
+
+  const handleUpdateActivity = useCallback((active: boolean) => {
+    setUpdateLocked(active)
+    if (active) setSettingsOpen(true)
+  }, [])
 
   const refresh = useCallback(async () => {
     try { const data = await loadDashboard(); setStatus(data.status); setCluster(data.cluster); setResources(data.resources); setServices(data.services); setLinks(data.links); setEvents(data.events) }
@@ -93,11 +99,14 @@ function App() {
   useEffect(() => { void loadTheme().then(value => setTheme(value.theme)).catch(() => undefined) }, [])
   useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
   useEffect(() => {
-    const check = () => void loadUpdateStatus().then(setUpdateStatus).catch(() => undefined)
+    const check = () => void loadUpdateStatus().then(value => {
+      setUpdateStatus(value)
+      if (['queued', 'running', 'rollback'].includes(value.installation.status)) handleUpdateActivity(true)
+    }).catch(() => undefined)
     check()
     const timer = window.setInterval(check, 15 * 60_000)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [handleUpdateActivity])
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(timer) }, [])
   useEffect(() => {
     let disposed = false
@@ -145,7 +154,7 @@ function App() {
   const dashboardTitle = status?.dashboard_name || 'HomeLab Dashboard'
   const dashboardSubtitle = status?.dashboard_subtitle || 'Deine Dienste auf einen Blick'
 
-  return <div className="dashboard">
+  return <div className={`dashboard ${updateLocked ? 'update-locked' : ''}`}>
     {updateStatus?.update_available && <aside className="update-banner">
       <span><Download /><strong>Dashboard-Update verfügbar</strong><small>Installiert: v{updateStatus.current_version} · Neu: v{updateStatus.latest_version}</small></span>
       <button type="button" onClick={() => setSettingsOpen(true)}>Update installieren<ChevronRight /></button>
@@ -175,8 +184,8 @@ function App() {
       </section>
     </main>
 
-    <footer><div><span className="home-mark"><img src="/favicon/favicon-32x32.png" alt="" /></span><strong>{dashboardTitle}</strong><i /><span>Dein Dashboard. Deine Konfiguration.</span></div><nav><button onClick={() => setSettingsOpen(true)}><Settings />Einstellungen</button></nav></footer>
-    {settingsOpen && <SettingsModal theme={theme} updateStatus={updateStatus} onThemeChanged={setTheme} onClose={() => setSettingsOpen(false)} onChanged={refresh} />}
+    <footer><div><span className="home-mark"><img src="/favicon/favicon-32x32.png" alt="" /></span><strong>{dashboardTitle}</strong><i /><span>Dein Dashboard. Deine Konfiguration.</span></div><nav><button className="settings-trigger" onClick={() => setSettingsOpen(true)}><Settings />Einstellungen</button></nav></footer>
+    {settingsOpen && <SettingsModal theme={theme} updateStatus={updateStatus} onThemeChanged={setTheme} onUpdateActivityChange={handleUpdateActivity} onClose={() => { if (!updateLocked) setSettingsOpen(false) }} onChanged={refresh} />}
   </div>
 }
 

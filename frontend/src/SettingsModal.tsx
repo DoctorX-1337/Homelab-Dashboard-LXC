@@ -29,15 +29,17 @@ const themes: { id: ThemeName; name: string; color: string; swatch?: string }[] 
   { id: 'pink', name: 'Rosa / Pink', color: '#E83E8C' },
 ]
 
-export function SettingsModal({ theme, updateStatus, onThemeChanged, onClose, onChanged }: { theme: ThemeName; updateStatus: UpdateStatus | null; onThemeChanged: (theme: ThemeName) => void; onClose: () => void; onChanged: () => void | Promise<void> }) {
+const activeUpdateStatuses = new Set<UpdateStatus['installation']['status']>(['queued', 'running', 'rollback'])
+
+export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateActivityChange, onClose, onChanged }: { theme: ThemeName; updateStatus: UpdateStatus | null; onThemeChanged: (theme: ThemeName) => void; onUpdateActivityChange: (active: boolean) => void; onClose: () => void; onChanged: () => void | Promise<void> }) {
   const [items, setItems] = useState<SettingsItems>(emptyItems)
   const [editor, setEditor] = useState<Editor | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [themeBusy, setThemeBusy] = useState(false)
-  const [updateBusy, setUpdateBusy] = useState(false)
   const [updateMessage, setUpdateMessage] = useState('')
   const [installation, setInstallation] = useState<UpdateStatus['installation'] | null>(updateStatus?.installation ?? null)
+  const updateActive = Boolean(installation && activeUpdateStatuses.has(installation.status))
 
   const reload = async () => {
     try { setItems(await loadSettings()); setError('') }
@@ -48,7 +50,27 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onClose, on
     void loadUpdateStatus().then(status => setInstallation(status.installation)).catch(() => undefined)
   }, [])
   useEffect(() => { if (updateStatus?.installation) setInstallation(updateStatus.installation) }, [updateStatus])
-
+  useEffect(() => {
+    onUpdateActivityChange(updateActive)
+  }, [onUpdateActivityChange, updateActive])
+  useEffect(() => {
+    if (!updateActive) return
+    let disposed = false
+    const poll = async () => {
+      try {
+        const current = await loadUpdateStatus()
+        if (disposed) return
+        setInstallation(current.installation)
+        setUpdateMessage(current.installation.message)
+        if (current.installation.status === 'success') {
+          window.setTimeout(() => window.location.reload(), 1_500)
+        }
+      } catch { /* The backend can be briefly unavailable during its restart. */ }
+    }
+    void poll()
+    const timer = window.setInterval(() => void poll(), 1_000)
+    return () => { disposed = true; window.clearInterval(timer) }
+  }, [updateActive])
   const selectTheme = async (nextTheme: ThemeName) => {
     if (nextTheme === theme || themeBusy) return
     const previousTheme = theme
@@ -88,38 +110,20 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onClose, on
   }
 
   const startUpdate = async () => {
-    setUpdateBusy(true); setUpdateMessage('Update wird vorbereitet…')
+    setUpdateMessage('Update wird vorbereitet…')
     setInstallation({ status: 'queued', message: 'Update-Dienst wird gestartet', progress: 2, target_version: updateStatus?.latest_version ?? null, updated_at: null })
     try {
       const request = await installUpdate()
       setUpdateMessage(`Version ${request.target_version} wird installiert. Das Dashboard startet anschließend neu…`)
-      for (let attempt = 0; attempt < 600; attempt += 1) {
-        await new Promise(resolve => window.setTimeout(resolve, 1_000))
-        try {
-          const current = await loadUpdateStatus()
-          setInstallation(current.installation)
-          setUpdateMessage(current.installation.message)
-          if (current.installation.status === 'failed') {
-            setUpdateMessage(current.installation.message || 'Update fehlgeschlagen; Details stehen im Systemprotokoll.')
-            return
-          }
-          if (current.current_version === request.target_version && current.installation.status === 'success') {
-            await new Promise(resolve => window.setTimeout(resolve, 900))
-            window.location.reload()
-            return
-          }
-        } catch { /* The backend is temporarily unavailable while it restarts. */ }
-      }
-      setUpdateMessage('Das Update läuft länger als erwartet. Bitte die Seite in einigen Minuten neu laden.')
-    } catch {
-      setUpdateMessage('Das Update konnte nicht gestartet werden. Bitte den Versionsstatus erneut prüfen.')
-    } finally {
-      setUpdateBusy(false)
+    } catch (caught) {
+      const message = caught instanceof Error && caught.message ? caught.message : 'Das Update konnte nicht gestartet werden.'
+      setUpdateMessage(message)
+      setInstallation({ status: 'failed', message, progress: 100, target_version: updateStatus?.latest_version ?? null, updated_at: new Date().toISOString() })
     }
   }
 
   const shownInstallation = installation ?? updateStatus?.installation
-  const showProgress = Boolean(updateBusy || (shownInstallation && shownInstallation.status !== 'idle' && shownInstallation.progress > 0))
+  const showProgress = Boolean(updateActive || (shownInstallation && shownInstallation.status !== 'idle' && shownInstallation.progress > 0))
 
   const editorForm = () => editor && <form className="settings-form inline-editor" onSubmit={event => void submit(event)}>
     <h3>{editor.mode === 'edit' ? 'Eintrag bearbeiten' : 'Neuen Eintrag anlegen'}</h3>
@@ -148,9 +152,9 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onClose, on
     </div>}
   </section>
 
-  return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+  return <div className={`modal-backdrop ${updateActive ? 'update-active' : ''}`} role="presentation" onMouseDown={event => { if (!updateActive && event.target === event.currentTarget) onClose() }}>
     <div className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <header><div><h2 id="settings-title">Dashboard-Einstellungen</h2><p>Anwendungen, Hosts und Schnelllinks verwalten – Proxmox-Systeme werden nur im Dashboard ausgeblendet.</p></div><button className="close" onClick={onClose} title="Schließen"><X /></button></header>
+      <header><div><h2 id="settings-title">Dashboard-Einstellungen</h2><p>Anwendungen, Hosts und Schnelllinks verwalten – Proxmox-Systeme werden nur im Dashboard ausgeblendet.</p></div><button className="close" disabled={updateActive} onClick={onClose} title={updateActive ? 'Während des Updates gesperrt' : 'Schließen'}><X /></button></header>
       {error && <p className="settings-error">{error}</p>}
       <section className="settings-section theme-settings">
         <div className="settings-section-head"><h3><Palette />Farbschema</h3><span>Design und Aufbau bleiben unverändert</span></div>
@@ -165,7 +169,7 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onClose, on
         <div className={updateStatus?.update_available ? 'update-panel available' : 'update-panel'}>
           <div><strong>{updateStatus?.error ? 'Versionsprüfung nicht verfügbar' : updateStatus?.update_available ? `Version ${updateStatus.latest_version} verfügbar` : 'Dashboard ist aktuell'}</strong><small>{updateMessage || (updateStatus ? `Installierte Version: ${updateStatus.current_version}` : 'Versionsstatus wird geladen…')}</small></div>
           <div className="update-actions">
-            <button className="primary" type="button" disabled={!updateStatus?.update_available || updateBusy} onClick={() => void startUpdate()}><Download />{updateBusy ? 'Update läuft…' : updateStatus?.update_available ? 'Jetzt aktualisieren' : 'Kein Update verfügbar'}</button>
+            <button className="primary" type="button" disabled={!updateStatus?.update_available || updateActive} onClick={() => void startUpdate()}><Download />{updateActive ? 'Update läuft…' : updateStatus?.update_available ? 'Jetzt aktualisieren' : 'Kein Update verfügbar'}</button>
             <a href={updateStatus?.repository_url || 'https://github.com/DoctorX-1337/Homelab-Dashboard-LXC'} target="_blank" rel="noreferrer" title="GitHub-Repository öffnen"><ExternalLink /></a>
           </div>
           {showProgress && shownInstallation && <div className={`update-progress ${shownInstallation.status}`} role="progressbar" aria-label="Update-Fortschritt" aria-valuemin={0} aria-valuemax={100} aria-valuenow={shownInstallation.progress}>
