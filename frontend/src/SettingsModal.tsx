@@ -123,7 +123,7 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
   }
 
   const shownInstallation = installation ?? updateStatus?.installation
-  const showProgress = Boolean(updateActive || (shownInstallation && shownInstallation.status !== 'idle' && shownInstallation.progress > 0))
+  const showProgress = Boolean(updateActive || shownInstallation?.status === 'failed')
 
   const editorForm = () => editor && <form className="settings-form inline-editor" onSubmit={event => void submit(event)}>
     <h3>{editor.mode === 'edit' ? 'Eintrag bearbeiten' : 'Neuen Eintrag anlegen'}</h3>
