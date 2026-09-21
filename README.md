@@ -4,7 +4,7 @@ Ein frei konfigurierbares Dashboard für Proxmox-Homelabs. Die React-Oberfläche
 
 ## Schnellinstallation auf Proxmox VE
 
-Der folgende Befehl wird als `root` direkt auf einem Proxmox-VE-Host ausgeführt. Der farbige Installer zeigt Konfiguration, sieben Installationsphasen und den aktuellen Prozess an, erstellt einen unprivilegierten Debian-LXC und installiert das jeweils neueste veröffentlichte Dashboard-Release:
+Der folgende Befehl wird als `root` direkt auf einem Proxmox-VE-Host ausgeführt. Der farbige Installer fragt verpflichtend einen vierstelligen Einstellungen-PIN mit Bestätigung ab, zeigt Konfiguration, sieben Installationsphasen und den aktuellen Prozess an, erstellt einen unprivilegierten Debian-LXC und installiert das jeweils neueste veröffentlichte Dashboard-Release:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/DoctorX-1337/Homelab-Dashboard-LXC/main/deploy/pve-install.sh)"
@@ -19,9 +19,13 @@ CTID=250 MEMORY=4096 STORAGE=local-zfs BRIDGE=vmbr1 \
 
 Weitere Variablen: `CT_HOSTNAME`, `CORES`, `SWAP`, `DISK_SIZE`, `IP_CONFIG`, `TEMPLATE_STORAGE` und `DASHBOARD_VERSION`.
 
+Für eine bewusst nicht interaktive Bereitstellung kann zusätzlich `DASHBOARD_PIN=1234` gesetzt werden. Der Klartext-PIN wird weder protokolliert noch gespeichert; im Container liegt nur ein mit PBKDF2-SHA256 gesalzener Hash. Nach zehn Fehlversuchen wird die PIN-Eingabe für fünf Minuten gebremst, eine erfolgreiche Sitzung läuft nach 30 Minuten ab.
+
 Nach der Installation gibt das Skript die lokale IP-Adresse aus. Anwendungen, Hosts und Links werden unter **Einstellungen** hinzugefügt. Für Clusterwerte wird optional `/etc/homelab-dashboard.env` im Container mit einem dedizierten Proxmox-Token der Rolle `PVEAuditor` ergänzt.
 
 Das vollständige Installationsprotokoll liegt auf dem Proxmox-Host unter `/var/log/homelab-dashboard-installer-<CTID>.log`. Bei einem Fehler zeigt der Installer automatisch die letzten relevanten Logzeilen an und lässt den Container für eine sichere Diagnose unverändert bestehen.
+
+Eigene, nicht öffentliche Logos werden updatefest unter `/opt/homelab-dashboard/data/logos/` abgelegt. Ein Icon `custom:mein-logo` verwendet dort `mein-logo.png`; persönliche Bilddateien und Namen müssen dadurch nicht ins öffentliche Repository aufgenommen werden.
 
 ## Datenschutz und öffentliche Standardkonfiguration
 
@@ -61,6 +65,12 @@ sudo bash deploy/install.sh
 ```
 
 Die Runtime-Konfiguration wird unter `data/config/` erzeugt. Alternativ kann `DASHBOARD_CONFIG_DIR` in `/etc/homelab-dashboard.env` auf ein anderes privates Verzeichnis zeigen.
+
+Bei einer manuellen Installation wird der PIN anschließend interaktiv gesetzt:
+
+```bash
+sudo bash deploy/set-pin.sh
+```
 
 ## Entwicklung und Prüfung
 

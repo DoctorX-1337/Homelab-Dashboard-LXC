@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 [[ ${EUID} -eq 0 ]] || { echo "Dieses Skript muss auf einem Proxmox-Host als root laufen." >&2; exit 1; }
 for required_command in pct pveam pvesh pvesm curl python3; do
@@ -39,6 +40,7 @@ TEMPLATE_STORAGE=${TEMPLATE_STORAGE:-$(pvesm status --content vztmpl | awk 'NR >
 DASHBOARD_VERSION=${DASHBOARD_VERSION:-latest}
 LOG_FILE="/var/log/homelab-dashboard-installer-${CTID}.log"
 CURRENT_TASK="Initialisierung"
+PIN_HASH_FILE=""
 
 fail() { printf '\n%s✗ %s%s\n' "$RED$BOLD" "$1" "$RESET" >&2; exit 1; }
 success() { printf '%s✓%s %s\n' "$GREEN$BOLD" "$RESET" "$1"; }
@@ -77,12 +79,42 @@ on_error() {
   exit "$exit_code"
 }
 
+cleanup() {
+  if [[ -n $PIN_HASH_FILE && -f $PIN_HASH_FILE ]]; then
+    rm -f -- "$PIN_HASH_FILE"
+  fi
+}
+
+configure_pin() {
+  local pin=${DASHBOARD_PIN:-} confirmation=""
+  if [[ -z $pin ]]; then
+    [[ -t 0 ]] || fail "Ohne interaktives Terminal muss DASHBOARD_PIN mit genau vier Ziffern gesetzt sein."
+    while true; do
+      read -r -s -p "Vierstelligen Einstellungen-PIN festlegen: " pin
+      echo
+      read -r -s -p "PIN wiederholen: " confirmation
+      echo
+      if [[ $pin =~ ^[0-9]{4}$ && $pin == "$confirmation" ]]; then
+        break
+      fi
+      echo "Die PINs stimmen nicht überein oder enthalten nicht genau vier Ziffern." >&2
+    done
+  fi
+  [[ $pin =~ ^[0-9]{4}$ ]] || fail "DASHBOARD_PIN muss genau vier Ziffern enthalten."
+  PIN_HASH_FILE=$(mktemp /run/homelab-dashboard-pin.XXXXXX)
+  chmod 0600 "$PIN_HASH_FILE"
+  printf '%s' "$pin" | python3 -c 'import base64,hashlib,secrets,sys; pin=sys.stdin.read(); salt=secrets.token_bytes(16); rounds=600000; digest=hashlib.pbkdf2_hmac("sha256",pin.encode(),salt,rounds); print(f"pbkdf2_sha256${rounds}${base64.urlsafe_b64encode(salt).decode()}${base64.urlsafe_b64encode(digest).decode()}")' >"$PIN_HASH_FILE"
+  unset pin confirmation DASHBOARD_PIN
+}
+
 banner
 
 [[ $CTID =~ ^[0-9]+$ ]] || fail "CTID muss numerisch sein."
 [[ $CORES =~ ^[0-9]+$ && $MEMORY =~ ^[0-9]+$ && $SWAP =~ ^[0-9]+$ && $DISK_SIZE =~ ^[0-9]+$ ]] || fail "CORES, MEMORY, SWAP und DISK_SIZE müssen numerisch sein."
 [[ -n $STORAGE && -n $TEMPLATE_STORAGE ]] || fail "Kein geeigneter Container- oder Template-Speicher gefunden."
 pct status "$CTID" >/dev/null 2>&1 && fail "CT $CTID existiert bereits; es wurden keine Änderungen vorgenommen."
+configure_pin
+trap cleanup EXIT
 install -m 0600 /dev/null "$LOG_FILE"
 trap on_error ERR
 
@@ -173,13 +205,27 @@ then
 else
   false
 fi
+run_task "Einstellungen-PIN sicher hinterlegen" pct push "$CTID" "$PIN_HASH_FILE" /run/homelab-dashboard-pin.hash -perms 0600
+run_task "PIN-Schutz aktivieren" pct exec "$CTID" -- bash /opt/homelab-dashboard/deploy/set-pin.sh --hash-file /run/homelab-dashboard-pin.hash
+pct exec "$CTID" -- rm -f /run/homelab-dashboard-pin.hash
 
 progress 7 7 "Installation und Erreichbarkeit prüfen"
-run_task "Lokale Dashboard-API testen" pct exec "$CTID" -- curl --fail --silent --show-error http://127.0.0.1/api/status
+wait_for_dashboard() {
+  for _ in $(seq 1 30); do
+    if pct exec "$CTID" -- curl --fail --silent --show-error http://127.0.0.1/api/status >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+run_task "Lokale Dashboard-API testen" wait_for_dashboard
 container_ip=$(pct exec "$CTID" -- hostname -I | awk '{print $1}')
 [[ -n $container_ip ]] || fail "Die Container-IP konnte nicht ermittelt werden."
 
 trap - ERR
+cleanup
+trap - EXIT
 printf '\n%s%s╭──────────────────────────────────────────────────────────╮%s\n' "$GREEN" "$BOLD" "$RESET"
 printf '%s%s│  ✓ HomeLab Dashboard v%-10s ist einsatzbereit       │%s\n' "$GREEN" "$BOLD" "$release_tag" "$RESET"
 printf '%s%s╰──────────────────────────────────────────────────────────╯%s\n\n' "$GREEN" "$BOLD" "$RESET"

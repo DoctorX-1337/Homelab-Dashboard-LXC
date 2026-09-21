@@ -2,7 +2,8 @@
 set -Eeuo pipefail
 [[ ${EUID} -eq 0 ]] || { echo "Bitte als root ausführen." >&2; exit 1; }
 APP_DIR=/opt/homelab-dashboard
-install -d -o homelab-dashboard -g homelab-dashboard -m 0750 "$APP_DIR/data" "$APP_DIR/data/config"
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
+install -d -o homelab-dashboard -g homelab-dashboard -m 0750 "$APP_DIR/data" "$APP_DIR/data/config" "$APP_DIR/data/logos"
 for config_file in services.yaml links.yaml; do
   if [[ ! -f "$APP_DIR/data/config/$config_file" ]]; then
     install -o homelab-dashboard -g homelab-dashboard -m 0640 "$APP_DIR/config/$config_file" "$APP_DIR/data/config/$config_file"

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Download, ExternalLink, GitBranch, Link2, Palette, Pencil, Plus, RotateCcw, Server, Trash2, X } from 'lucide-react'
-import { addSetting, deleteSetting, installUpdate, loadSettings, loadUpdateStatus, updateSetting, updateTheme } from './api'
+import { Download, ExternalLink, GitBranch, Link2, LockKeyhole, Palette, Pencil, Plus, RotateCcw, Server, Trash2, X } from 'lucide-react'
+import { addSetting, deleteSetting, installUpdate, loadAuthStatus, loadSettings, loadUpdateStatus, unlockSettings, updateSetting, updateTheme } from './api'
 import type { EditableItem, ManagedItem, SettingsItems, ThemeName, UpdateStatus } from './types'
 
 type Kind = 'applications' | 'links'
@@ -39,6 +39,11 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
   const [themeBusy, setThemeBusy] = useState(false)
   const [updateMessage, setUpdateMessage] = useState('')
   const [installation, setInstallation] = useState<UpdateStatus['installation'] | null>(updateStatus?.installation ?? null)
+  const [authenticated, setAuthenticated] = useState(false)
+  const [authChecking, setAuthChecking] = useState(true)
+  const [pin, setPin] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [pinBusy, setPinBusy] = useState(false)
   const updateActive = Boolean(installation && activeUpdateStatuses.has(installation.status))
 
   const reload = async () => {
@@ -46,7 +51,11 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
     catch { setError('Die Einstellungen konnten nicht geladen werden.') }
   }
   useEffect(() => {
-    void reload()
+    void loadAuthStatus().then(status => {
+      setAuthenticated(status.authenticated)
+      if (status.authenticated) void reload()
+      if (!status.configured) setPinError('Für diese Installation wurde noch kein Einstellungen-PIN eingerichtet.')
+    }).catch(() => setPinError('Der PIN-Status konnte nicht geladen werden.')).finally(() => setAuthChecking(false))
     void loadUpdateStatus().then(status => setInstallation(status.installation)).catch(() => undefined)
   }, [])
   useEffect(() => { if (updateStatus?.installation) setInstallation(updateStatus.installation) }, [updateStatus])
@@ -125,11 +134,35 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
   const shownInstallation = installation ?? updateStatus?.installation
   const showProgress = Boolean(updateActive || shownInstallation?.status === 'failed')
 
+  const submitPin = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!/^\d{4}$/.test(pin)) { setPinError('Bitte genau vier Ziffern eingeben.'); return }
+    setPinBusy(true); setPinError('')
+    try {
+      await unlockSettings(pin)
+      setAuthenticated(true); setPin(''); await reload()
+    } catch (caught) {
+      setPinError(caught instanceof Error ? caught.message : 'PIN-Prüfung fehlgeschlagen')
+    } finally { setPinBusy(false) }
+  }
+
+  if (authChecking || !authenticated) return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="settings-modal pin-modal" role="dialog" aria-modal="true" aria-labelledby="pin-title">
+      <header><div><h2 id="pin-title">Einstellungen entsperren</h2><p>Der vierstellige Installations-PIN schützt Änderungen im lokalen Netzwerk.</p></div><button className="close" onClick={onClose} title="Schließen"><X /></button></header>
+      {authChecking ? <p className="pin-checking">PIN-Schutz wird geprüft…</p> : <form className="pin-form" onSubmit={event => void submitPin(event)}>
+        <span><LockKeyhole /></span>
+        <label>Dashboard-PIN<input autoFocus required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{4}" maxLength={4} value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" /></label>
+        <button className="primary" disabled={pinBusy || pin.length !== 4}>{pinBusy ? 'Prüfe…' : 'Entsperren'}</button>
+        {pinError && <p className="settings-error">{pinError}</p>}
+      </form>}
+    </div>
+  </div>
+
   const editorForm = () => editor && <form className="settings-form inline-editor" onSubmit={event => void submit(event)}>
     <h3>{editor.mode === 'edit' ? 'Eintrag bearbeiten' : 'Neuen Eintrag anlegen'}</h3>
     <div className="form-grid">
       <label>Name<input autoFocus required maxLength={80} value={editor.item.name} onChange={event => setEditor({ ...editor, item: { ...editor.item, name: event.target.value } })} /></label>
-      <label>Icon<select value={editor.item.icon} onChange={event => setEditor({ ...editor, item: { ...editor.item, icon: event.target.value } })}>{iconOptions.map(icon => <option key={icon}>{icon}</option>)}</select></label>
+      <label>Icon<select value={editor.item.icon} onChange={event => setEditor({ ...editor, item: { ...editor.item, icon: event.target.value } })}>{!iconOptions.includes(editor.item.icon) && <option value={editor.item.icon}>{editor.item.icon}</option>}{iconOptions.map(icon => <option key={icon}>{icon}</option>)}</select></label>
       <label className="wide">Beschreibung<input maxLength={180} value={editor.item.description} onChange={event => setEditor({ ...editor, item: { ...editor.item, description: event.target.value } })} /></label>
       <label className="wide">URL<input required={editor.kind === 'links' || editor.mode === 'add'} type="url" placeholder="https://service.example.com" value={editor.item.url} onChange={event => setEditor({ ...editor, item: { ...editor.item, url: event.target.value } })} /></label>
       {editor.kind === 'applications' && <label className="checkbox"><input type="checkbox" checked={Boolean(editor.item.favorite)} onChange={event => setEditor({ ...editor, item: { ...editor.item, favorite: event.target.checked } })} />Als Favorit markieren</label>}

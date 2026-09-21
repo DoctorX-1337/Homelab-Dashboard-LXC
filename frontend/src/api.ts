@@ -1,4 +1,4 @@
-import type { ApiStatus, Cluster, DashboardEvent, EditableItem, Link, Resource, Service, SettingsItems, ThemeName, ThemePreference, UpdateStatus } from './types'
+import type { ApiStatus, AuthStatus, Cluster, DashboardEvent, EditableItem, Link, Resource, Service, SettingsItems, ThemeName, ThemePreference, UpdateStatus } from './types'
 
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(path, { headers: { Accept: 'application/json' } })
@@ -17,6 +17,20 @@ export async function loadDashboard() {
 export const loadSettings = () => get<SettingsItems>('/api/settings/items')
 export const loadTheme = () => get<ThemePreference>('/api/settings/theme')
 export const loadUpdateStatus = () => get<UpdateStatus>('/api/update-status')
+export const loadAuthStatus = () => get<AuthStatus>('/api/auth/status')
+
+export async function unlockSettings(pin: string) {
+  const response = await fetch('/api/auth/pin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Dashboard-Settings': '1' },
+    body: JSON.stringify({ pin }),
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { detail?: string } | null
+    throw new Error(payload?.detail || 'PIN-Prüfung fehlgeschlagen')
+  }
+  return response.json() as Promise<{ authenticated: boolean }>
+}
 
 export async function installUpdate() {
   const response = await fetch('/api/update', {

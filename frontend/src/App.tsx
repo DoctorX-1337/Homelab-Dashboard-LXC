@@ -22,6 +22,10 @@ const logoFiles: Record<string, string> = {
   whatsapp: 'whatsapp.png', windows: 'windows.png', wireguard: 'wireguard.png', x: 'x.png', youtube: 'youtube.png',
 }
 const logoFor = (icon: string, name = '') => {
+  if (icon.startsWith('custom:')) {
+    const customName = icon.slice('custom:'.length)
+    return /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(customName) ? `/api/custom-logos/${encodeURIComponent(customName)}.png` : null
+  }
   const nameAliases: Record<string, string> = {
     'fritz!box': 'fritzbox', homedc: 'windows', 'nas01': 'qnap',
     'nginx proxyverwaltung': 'nginx', wireguard: 'wireguard',

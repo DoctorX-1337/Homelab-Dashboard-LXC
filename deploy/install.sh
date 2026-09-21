@@ -8,6 +8,7 @@ fi
 
 APP_DIR=/opt/homelab-dashboard
 ENV_FILE=/etc/homelab-dashboard.env
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl nginx python3 python3-venv python3-pip rsync
@@ -18,7 +19,7 @@ fi
 
 getent group homelab-dashboard >/dev/null || groupadd --system homelab-dashboard
 id homelab-dashboard >/dev/null 2>&1 || useradd --system --gid homelab-dashboard --home-dir "$APP_DIR" --shell /usr/sbin/nologin homelab-dashboard
-install -d -o homelab-dashboard -g homelab-dashboard -m 0750 "$APP_DIR/data" "$APP_DIR/data/config"
+install -d -o homelab-dashboard -g homelab-dashboard -m 0750 "$APP_DIR/data" "$APP_DIR/data/config" "$APP_DIR/data/logos"
 for config_file in services.yaml links.yaml; do
   if [[ ! -f "$APP_DIR/data/config/$config_file" ]]; then
     install -o homelab-dashboard -g homelab-dashboard -m 0640 "$APP_DIR/config/$config_file" "$APP_DIR/data/config/$config_file"
@@ -56,5 +57,17 @@ systemctl daemon-reload
 systemctl enable --now homelab-dashboard nginx homelab-dashboard-update.path
 systemctl restart homelab-dashboard nginx
 
-curl --fail --silent --show-error http://127.0.0.1/api/status >/dev/null
+dashboard_ready=false
+for _ in $(seq 1 30); do
+  if curl --fail --silent --show-error http://127.0.0.1/api/status >/dev/null 2>&1; then
+    dashboard_ready=true
+    break
+  fi
+  sleep 1
+done
+if [[ $dashboard_ready != true ]]; then
+  journalctl -u homelab-dashboard --no-pager -n 40 >&2
+  echo "Dashboard-API wurde nach dem Start nicht rechtzeitig bereit." >&2
+  exit 1
+fi
 echo "HomeLab Dashboard ist lokal erreichbar."

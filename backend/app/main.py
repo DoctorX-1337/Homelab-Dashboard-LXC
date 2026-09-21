@@ -1,19 +1,34 @@
 from __future__ import annotations
 
 import os
+import re
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from typing import Literal
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
+from app.security import create_session, pin_is_configured, verify_pin, verify_session
 from app.services.dashboard import state
 from app.services.custom_items import EditableItem, ThemePreference, custom_items
 from app.services.updates import read_installation_state, update_checker, write_installation_state
 from app.settings import settings
+
+
+CUSTOM_LOGO_DIRECTORY = Path(__file__).resolve().parents[2] / "data" / "logos"
+CUSTOM_LOGO_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}\.(?:png|webp|jpe?g)$")
+SESSION_COOKIE = "homelab_dashboard_session"
+FAILED_PIN_ATTEMPTS: dict[str, list[float]] = {}
+
+
+class PinLogin(BaseModel):
+    pin: str
 
 
 @asynccontextmanager
@@ -49,6 +64,16 @@ async def api_status():
         "verify_ssl": settings.proxmox_verify_ssl,
         "latest_backup": state.latest_backup,
     }
+
+
+@app.get("/api/custom-logos/{logo_name}", response_class=FileResponse)
+async def api_custom_logo(logo_name: str):
+    if not CUSTOM_LOGO_PATTERN.fullmatch(logo_name):
+        raise HTTPException(status_code=404, detail="Logo nicht gefunden")
+    logo_path = CUSTOM_LOGO_DIRECTORY / logo_name
+    if not logo_path.is_file():
+        raise HTTPException(status_code=404, detail="Logo nicht gefunden")
+    return FileResponse(logo_path)
 
 
 @app.get("/api/cluster")
@@ -116,6 +141,12 @@ async def api_update_status():
 
 
 def require_settings_request(request: Request) -> None:
+    require_same_origin(request)
+    if not verify_session(request.cookies.get(SESSION_COOKIE)):
+        raise HTTPException(status_code=401, detail="Einstellungen sind gesperrt")
+
+
+def require_same_origin(request: Request) -> None:
     if request.headers.get("x-dashboard-settings") != "1":
         raise HTTPException(status_code=403, detail="Einstellungsanfrage nicht bestätigt")
     origin = request.headers.get("origin")
@@ -123,6 +154,43 @@ def require_settings_request(request: Request) -> None:
     request_host = request.url.hostname
     if not origin_host or origin_host != request_host:
         raise HTTPException(status_code=403, detail="Ungültiger Anfrageursprung")
+
+
+@app.get("/api/auth/status")
+async def api_auth_status(request: Request):
+    configured = pin_is_configured()
+    return {
+        "configured": configured,
+        "authenticated": configured and verify_session(request.cookies.get(SESSION_COOKIE)),
+    }
+
+
+@app.post("/api/auth/pin")
+async def api_auth_pin(payload: PinLogin, request: Request, response: Response):
+    require_same_origin(request)
+    if not pin_is_configured():
+        raise HTTPException(status_code=503, detail="Dashboard-PIN ist noch nicht eingerichtet")
+    client = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    attempts = [value for value in FAILED_PIN_ATTEMPTS.get(client, []) if now - value < 300]
+    if len(attempts) >= 10:
+        raise HTTPException(status_code=429, detail="Zu viele Fehlversuche; bitte fünf Minuten warten")
+    if not verify_pin(payload.pin):
+        attempts.append(now)
+        FAILED_PIN_ATTEMPTS[client] = attempts
+        raise HTTPException(status_code=401, detail="PIN ist nicht korrekt")
+    FAILED_PIN_ATTEMPTS.pop(client, None)
+    token, _ = create_session()
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=30 * 60,
+        httponly=True,
+        samesite="strict",
+        secure=request.url.scheme == "https",
+        path="/",
+    )
+    return {"authenticated": True}
 
 
 @app.post("/api/update", status_code=202)

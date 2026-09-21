@@ -31,6 +31,7 @@ export type Service = {
 export type Link = { name: string; description: string; icon: string; url: string }
 export type ThemeName = 'multicolor' | 'blue' | 'green' | 'yellow' | 'red' | 'black' | 'purple' | 'cyan' | 'orange' | 'pink'
 export type ThemePreference = { theme: ThemeName }
+export type AuthStatus = { configured: boolean; authenticated: boolean }
 export type UpdateStatus = {
   current_version: string
   latest_version: string | null
