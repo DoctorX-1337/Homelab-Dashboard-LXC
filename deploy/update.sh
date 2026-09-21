@@ -55,7 +55,6 @@ install -o root -g root -m 0644 "$APP_DIR/deploy/homelab-dashboard-update.path" 
 install -o root -g root -m 0644 "$APP_DIR/deploy/nginx.conf" /etc/nginx/sites-available/homelab-dashboard
 chown -R homelab-dashboard:homelab-dashboard "$APP_DIR"
 chmod 0755 "$APP_DIR" "$APP_DIR/frontend" "$APP_DIR/frontend/dist"
-nginx -t
 systemctl daemon-reload
 systemctl enable --now homelab-dashboard-update.path
 report_progress 94 "Dashboard-Dienste werden neu gestartet"
