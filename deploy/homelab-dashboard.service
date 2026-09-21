@@ -1,0 +1,28 @@
+[Unit]
+Description=HomeLab Dashboard API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=homelab-dashboard
+Group=homelab-dashboard
+WorkingDirectory=/opt/homelab-dashboard
+EnvironmentFile=/etc/homelab-dashboard.env
+ExecStart=/opt/homelab-dashboard/.venv/bin/uvicorn app.main:app --app-dir /opt/homelab-dashboard/backend --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=4
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/homelab-dashboard
+CapabilityBoundingSet=
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RuntimeDirectory=homelab-dashboard
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=restart
+
+[Install]
+WantedBy=multi-user.target

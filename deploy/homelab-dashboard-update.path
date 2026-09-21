@@ -1,0 +1,10 @@
+[Unit]
+Description=HomeLab Dashboard Update-Anforderung überwachen
+After=homelab-dashboard.service
+
+[Path]
+PathExists=/run/homelab-dashboard/update-request
+Unit=homelab-dashboard-update.service
+
+[Install]
+WantedBy=multi-user.target
