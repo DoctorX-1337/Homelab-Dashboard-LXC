@@ -1,0 +1,13 @@
+[Unit]
+Description=HomeLab Dashboard Einstellungen-PIN ändern
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-dashboard-apply-pin
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/homelab-dashboard/data /run/homelab-dashboard
+NoNewPrivileges=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX

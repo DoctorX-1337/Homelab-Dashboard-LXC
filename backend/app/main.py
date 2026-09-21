@@ -14,7 +14,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.security import create_session, pin_is_configured, verify_pin, verify_session
+from app.security import create_session, hash_pin, pin_is_configured, verify_pin, verify_session
 from app.services.dashboard import state
 from app.services.custom_items import EditableItem, ThemePreference, custom_items
 from app.services.updates import read_installation_state, update_checker, write_installation_state
@@ -29,6 +29,11 @@ FAILED_PIN_ATTEMPTS: dict[str, list[float]] = {}
 
 class PinLogin(BaseModel):
     pin: str
+
+
+class PinChange(BaseModel):
+    current_pin: str
+    new_pin: str
 
 
 @asynccontextmanager
@@ -191,6 +196,28 @@ async def api_auth_pin(payload: PinLogin, request: Request, response: Response):
         path="/",
     )
     return {"authenticated": True}
+
+
+@app.put("/api/settings/pin", status_code=202)
+async def api_settings_pin_update(payload: PinChange, request: Request):
+    require_settings_request(request)
+    if not verify_pin(payload.current_pin):
+        raise HTTPException(status_code=401, detail="Der aktuelle PIN ist nicht korrekt")
+    try:
+        encoded_pin = hash_pin(payload.new_pin)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    request_path = Path("/run/homelab-dashboard/pin-change-request")
+    try:
+        descriptor = os.open(request_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(encoded_pin)
+            handle.write("\n")
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail="Eine PIN-Änderung wird bereits verarbeitet") from exc
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail="PIN-Änderung konnte nicht gestartet werden") from exc
+    return {"accepted": True}
 
 
 @app.post("/api/update", status_code=202)

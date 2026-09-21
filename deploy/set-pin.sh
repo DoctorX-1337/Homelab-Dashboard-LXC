@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 [[ ${EUID} -eq 0 ]] || { echo "Dieses Skript benötigt root-Rechte." >&2; exit 1; }
-readonly PIN_FILE=/etc/homelab-dashboard.pin
+readonly PIN_FILE=/opt/homelab-dashboard/data/settings-pin
 hash_file=""
 
 if [[ ${1:-} == --hash-file ]]; then
@@ -32,6 +32,7 @@ else
 fi
 
 getent group homelab-dashboard >/dev/null || { echo "Dashboard-Gruppe ist noch nicht vorhanden." >&2; exit 1; }
+install -d -o homelab-dashboard -g homelab-dashboard -m 0750 "$(dirname "$PIN_FILE")"
 install -o root -g homelab-dashboard -m 0640 "$hash_file" "$PIN_FILE"
 if systemctl is-active --quiet homelab-dashboard; then
   systemctl restart homelab-dashboard

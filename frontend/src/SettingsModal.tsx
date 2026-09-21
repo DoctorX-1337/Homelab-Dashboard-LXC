@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Download, ExternalLink, GitBranch, Link2, LockKeyhole, Palette, Pencil, Plus, RotateCcw, Server, Trash2, X } from 'lucide-react'
-import { addSetting, deleteSetting, installUpdate, loadAuthStatus, loadSettings, loadUpdateStatus, unlockSettings, updateSetting, updateTheme } from './api'
+import { addSetting, changeSettingsPin, deleteSetting, installUpdate, loadAuthStatus, loadSettings, loadUpdateStatus, unlockSettings, updateSetting, updateTheme } from './api'
 import type { EditableItem, ManagedItem, SettingsItems, ThemeName, UpdateStatus } from './types'
 
 type Kind = 'applications' | 'links'
@@ -44,6 +44,11 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
   const [pin, setPin] = useState('')
   const [pinError, setPinError] = useState('')
   const [pinBusy, setPinBusy] = useState(false)
+  const [currentPin, setCurrentPin] = useState('')
+  const [newPin, setNewPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
+  const [pinChangeBusy, setPinChangeBusy] = useState(false)
+  const [pinChangeMessage, setPinChangeMessage] = useState('')
   const updateActive = Boolean(installation && activeUpdateStatuses.has(installation.status))
 
   const reload = async () => {
@@ -146,6 +151,21 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
     } finally { setPinBusy(false) }
   }
 
+  const submitPinChange = async (event: React.FormEvent) => {
+    event.preventDefault(); setPinChangeMessage('')
+    if (!/^\d{4}$/.test(currentPin) || !/^\d{4}$/.test(newPin)) { setPinChangeMessage('Aktueller und neuer PIN müssen genau vier Ziffern enthalten.'); return }
+    if (newPin !== confirmPin) { setPinChangeMessage('Die neuen PINs stimmen nicht überein.'); return }
+    setPinChangeBusy(true)
+    try {
+      await changeSettingsPin(currentPin, newPin)
+      setPinChangeMessage('PIN wird geändert. Anschließend bitte neu anmelden…')
+      setCurrentPin(''); setNewPin(''); setConfirmPin('')
+      window.setTimeout(() => window.location.reload(), 1_800)
+    } catch (caught) {
+      setPinChangeMessage(caught instanceof Error ? caught.message : 'PIN konnte nicht geändert werden')
+    } finally { setPinChangeBusy(false) }
+  }
+
   if (authChecking || !authenticated) return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
     <div className="settings-modal pin-modal" role="dialog" aria-modal="true" aria-labelledby="pin-title">
       <header><div><h2 id="pin-title">Einstellungen entsperren</h2><p>Der vierstellige Installations-PIN schützt Änderungen im lokalen Netzwerk.</p></div><button className="close" onClick={onClose} title="Schließen"><X /></button></header>
@@ -189,6 +209,16 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
     <div className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <header><div><h2 id="settings-title">Dashboard-Einstellungen</h2><p>Anwendungen, Hosts und Schnelllinks verwalten – Proxmox-Systeme werden nur im Dashboard ausgeblendet.</p></div><button className="close" disabled={updateActive} onClick={onClose} title={updateActive ? 'Während des Updates gesperrt' : 'Schließen'}><X /></button></header>
       {error && <p className="settings-error">{error}</p>}
+      <section className="settings-section security-settings">
+        <div className="settings-section-head"><h3><LockKeyhole />Einstellungen-PIN</h3><span>Vierstelligen PIN sicher ändern</span></div>
+        <form className="pin-change-form" onSubmit={event => void submitPinChange(event)}>
+          <label>Aktueller PIN<input required inputMode="numeric" autoComplete="current-password" pattern="[0-9]{4}" maxLength={4} value={currentPin} onChange={event => setCurrentPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" /></label>
+          <label>Neuer PIN<input required inputMode="numeric" autoComplete="new-password" pattern="[0-9]{4}" maxLength={4} value={newPin} onChange={event => setNewPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" /></label>
+          <label>Neuen PIN bestätigen<input required inputMode="numeric" autoComplete="new-password" pattern="[0-9]{4}" maxLength={4} value={confirmPin} onChange={event => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" /></label>
+          <button className="primary" disabled={pinChangeBusy}>{pinChangeBusy ? 'Ändert…' : 'PIN ändern'}</button>
+          {pinChangeMessage && <p>{pinChangeMessage}</p>}
+        </form>
+      </section>
       <section className="settings-section theme-settings">
         <div className="settings-section-head"><h3><Palette />Farbschema</h3><span>Design und Aufbau bleiben unverändert</span></div>
         <div className="theme-grid">

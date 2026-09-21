@@ -1,0 +1,10 @@
+[Unit]
+Description=HomeLab Dashboard PIN-Änderung überwachen
+After=homelab-dashboard.service
+
+[Path]
+PathExists=/run/homelab-dashboard/pin-change-request
+Unit=homelab-dashboard-pin-change.service
+
+[Install]
+WantedBy=multi-user.target

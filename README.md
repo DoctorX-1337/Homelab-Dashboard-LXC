@@ -19,7 +19,7 @@ CTID=250 MEMORY=4096 STORAGE=local-zfs BRIDGE=vmbr1 \
 
 Weitere Variablen: `CT_HOSTNAME`, `CORES`, `SWAP`, `DISK_SIZE`, `IP_CONFIG`, `TEMPLATE_STORAGE` und `DASHBOARD_VERSION`.
 
-Für eine bewusst nicht interaktive Bereitstellung kann zusätzlich `DASHBOARD_PIN=1234` gesetzt werden. Der Klartext-PIN wird weder protokolliert noch gespeichert; im Container liegt nur ein mit PBKDF2-SHA256 gesalzener Hash. Nach zehn Fehlversuchen wird die PIN-Eingabe für fünf Minuten gebremst, eine erfolgreiche Sitzung läuft nach 30 Minuten ab.
+Für eine bewusst nicht interaktive Bereitstellung kann zusätzlich `DASHBOARD_PIN=1234` gesetzt werden. Der Klartext-PIN wird weder protokolliert noch gespeichert; im privaten Datenbereich liegt nur ein mit PBKDF2-SHA256 gesalzener Hash. Nach zehn Fehlversuchen wird die PIN-Eingabe für fünf Minuten gebremst, eine erfolgreiche Sitzung läuft nach 30 Minuten ab. Der PIN kann später unter **Einstellungen → Einstellungen-PIN** geändert werden; danach ist eine neue Anmeldung erforderlich.
 
 Nach der Installation gibt das Skript die lokale IP-Adresse aus. Anwendungen, Hosts und Links werden unter **Einstellungen** hinzugefügt. Für Clusterwerte wird optional `/etc/homelab-dashboard.env` im Container mit einem dedizierten Proxmox-Token der Rolle `PVEAuditor` ergänzt.
 

@@ -53,11 +53,15 @@ install -o root -g root -m 0644 "$APP_DIR/deploy/homelab-dashboard.service" /etc
 install -o root -g root -m 0755 "$APP_DIR/deploy/manual-update.sh" /usr/local/sbin/homelab-dashboard-manual-update
 install -o root -g root -m 0644 "$APP_DIR/deploy/homelab-dashboard-update.service" /etc/systemd/system/homelab-dashboard-update.service
 install -o root -g root -m 0644 "$APP_DIR/deploy/homelab-dashboard-update.path" /etc/systemd/system/homelab-dashboard-update.path
+install -o root -g root -m 0755 "$APP_DIR/deploy/apply-pin-change.sh" /usr/local/sbin/homelab-dashboard-apply-pin
+install -o root -g root -m 0644 "$APP_DIR/deploy/homelab-dashboard-pin-change.service" /etc/systemd/system/homelab-dashboard-pin-change.service
+install -o root -g root -m 0644 "$APP_DIR/deploy/homelab-dashboard-pin-change.path" /etc/systemd/system/homelab-dashboard-pin-change.path
 install -o root -g root -m 0644 "$APP_DIR/deploy/nginx.conf" /etc/nginx/sites-available/homelab-dashboard
 chown -R homelab-dashboard:homelab-dashboard "$APP_DIR"
 chmod 0755 "$APP_DIR" "$APP_DIR/frontend" "$APP_DIR/frontend/dist"
 systemctl daemon-reload
 systemctl enable --now homelab-dashboard-update.path
+systemctl enable --now homelab-dashboard-pin-change.path
 report_progress 94 "Dashboard-Dienste werden neu gestartet"
 systemctl restart homelab-dashboard nginx
 for attempt in $(seq 1 30); do

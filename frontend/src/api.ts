@@ -32,6 +32,19 @@ export async function unlockSettings(pin: string) {
   return response.json() as Promise<{ authenticated: boolean }>
 }
 
+export async function changeSettingsPin(currentPin: string, newPin: string) {
+  const response = await fetch('/api/settings/pin', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Dashboard-Settings': '1' },
+    body: JSON.stringify({ current_pin: currentPin, new_pin: newPin }),
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { detail?: string } | null
+    throw new Error(payload?.detail || 'PIN konnte nicht geändert werden')
+  }
+  return response.json() as Promise<{ accepted: boolean }>
+}
+
 export async function installUpdate() {
   const response = await fetch('/api/update', {
     method: 'POST',

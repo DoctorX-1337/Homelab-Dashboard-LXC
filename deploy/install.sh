@@ -47,6 +47,9 @@ install -o root -g root -m 0644 "$APP_DIR/deploy/homelab-dashboard.service" /etc
 install -o root -g root -m 0755 "$APP_DIR/deploy/manual-update.sh" /usr/local/sbin/homelab-dashboard-manual-update
 install -o root -g root -m 0644 "$APP_DIR/deploy/homelab-dashboard-update.service" /etc/systemd/system/homelab-dashboard-update.service
 install -o root -g root -m 0644 "$APP_DIR/deploy/homelab-dashboard-update.path" /etc/systemd/system/homelab-dashboard-update.path
+install -o root -g root -m 0755 "$APP_DIR/deploy/apply-pin-change.sh" /usr/local/sbin/homelab-dashboard-apply-pin
+install -o root -g root -m 0644 "$APP_DIR/deploy/homelab-dashboard-pin-change.service" /etc/systemd/system/homelab-dashboard-pin-change.service
+install -o root -g root -m 0644 "$APP_DIR/deploy/homelab-dashboard-pin-change.path" /etc/systemd/system/homelab-dashboard-pin-change.path
 install -o root -g root -m 0644 "$APP_DIR/deploy/nginx.conf" /etc/nginx/sites-available/homelab-dashboard
 ln -sfn /etc/nginx/sites-available/homelab-dashboard /etc/nginx/sites-enabled/homelab-dashboard
 rm -f /etc/nginx/sites-enabled/default
@@ -54,7 +57,7 @@ chown -R homelab-dashboard:homelab-dashboard "$APP_DIR"
 chmod 0755 "$APP_DIR" "$APP_DIR/frontend" "$APP_DIR/frontend/dist"
 nginx -t
 systemctl daemon-reload
-systemctl enable --now homelab-dashboard nginx homelab-dashboard-update.path
+systemctl enable --now homelab-dashboard nginx homelab-dashboard-update.path homelab-dashboard-pin-change.path
 systemctl restart homelab-dashboard nginx
 
 dashboard_ready=false

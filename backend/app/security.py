@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 
-PIN_FILE = Path(os.getenv("DASHBOARD_PIN_FILE", "/etc/homelab-dashboard.pin"))
+PIN_FILE = Path(os.getenv("DASHBOARD_PIN_FILE", "/opt/homelab-dashboard/data/settings-pin"))
 PIN_PATTERN = re.compile(r"^\d{4}$")
 SESSION_TTL_SECONDS = 30 * 60
 PBKDF2_ALGORITHM = "sha256"
