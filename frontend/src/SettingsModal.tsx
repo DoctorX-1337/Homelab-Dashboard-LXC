@@ -1,19 +1,24 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Download, ExternalLink, GitBranch, Link2, LockKeyhole, Palette, Pencil, Plus, RotateCcw, Server, Trash2, X } from 'lucide-react'
-import { addSetting, changeSettingsPin, deleteSetting, installUpdate, loadAuthStatus, loadSettings, loadUpdateStatus, unlockSettings, updateSetting, updateTheme } from './api'
-import type { EditableItem, ManagedItem, SettingsItems, ThemeName, UpdateStatus } from './types'
+import { Database, Download, ExternalLink, GitBranch, HardDrive, Link2, LockKeyhole, Palette, Pencil, Plus, RotateCcw, Server, Trash2, Upload, X } from 'lucide-react'
+import { addSetting, changeSettingsPin, deleteSetting, installUpdate, loadAuthStatus, loadInfrastructure, loadSettings, loadUpdateStatus, saveInfrastructure, unlockSettings, updateSetting, updateTheme, uploadCustomLogo } from './api'
+import type { EditableItem, InfrastructureConfig, ManagedItem, SettingsItems, ThemeName, UpdateStatus } from './types'
 
 type Kind = 'applications' | 'links'
 type Editor = { kind: Kind; mode: 'add' | 'edit'; item: EditableItem }
 
 const emptyItems: SettingsItems = { applications: [], links: [] }
+const emptyInfrastructure: InfrastructureConfig = {
+  proxmox_host: '', proxmox_user: '', proxmox_token_name: '', proxmox_token_configured: false,
+  proxmox_verify_ssl: true, storage_source: 'proxmox', storage_ids: [], pbs_host: '', pbs_user: '',
+  pbs_token_name: '', pbs_token_configured: false, pbs_datastore: '', pbs_verify_ssl: true,
+}
 const blank = (kind: Kind): EditableItem => ({
   name: '', description: '', icon: kind === 'applications' ? 'server' : 'link', url: '', favorite: false,
 })
 const iconOptions = [
   'server', 'link', 'proxmox', 'pbs', 'jellyfin', 'adguard', 'lokaleki', 'jdownloader', 'joplin',
   'certbot', 'patchmon', 'checkmk', 'lyrion', 'immich', 'iventoy', 'cloudflare',
-  'outlook', 'icloud', 'youtube', 'prime-video', 'twitch', 'instagram', 'whatsapp', 'x', 'paypal',
+  'outlook', 'icloud', 'youtube', 'prime-video', 'twitch', 'instagram', 'whatsapp', 'x', 'paypal', 'github',
 ]
 
 const themes: { id: ThemeName; name: string; color: string; swatch?: string }[] = [
@@ -49,10 +54,24 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
   const [confirmPin, setConfirmPin] = useState('')
   const [pinChangeBusy, setPinChangeBusy] = useState(false)
   const [pinChangeMessage, setPinChangeMessage] = useState('')
+  const [infrastructureConfig, setInfrastructureConfig] = useState<InfrastructureConfig>(emptyInfrastructure)
+  const [storageIds, setStorageIds] = useState('')
+  const [proxmoxSecret, setProxmoxSecret] = useState('')
+  const [pbsSecret, setPbsSecret] = useState('')
+  const [infrastructureBusy, setInfrastructureBusy] = useState(false)
+  const [infrastructureMessage, setInfrastructureMessage] = useState('')
+  const [logoBusy, setLogoBusy] = useState(false)
+  const [logoMessage, setLogoMessage] = useState('')
   const updateActive = Boolean(installation && activeUpdateStatuses.has(installation.status))
 
   const reload = async () => {
-    try { setItems(await loadSettings()); setError('') }
+    try {
+      const [nextItems, infrastructure] = await Promise.all([loadSettings(), loadInfrastructure()])
+      setItems(nextItems)
+      setInfrastructureConfig(infrastructure.config)
+      setStorageIds(infrastructure.config.storage_ids.join(', '))
+      setError('')
+    }
     catch { setError('Die Einstellungen konnten nicht geladen werden.') }
   }
   useEffect(() => {
@@ -105,6 +124,39 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
       await reload(); await onChanged(); setEditor(null)
     } catch { setError('Der Eintrag konnte nicht gespeichert werden. Bitte URL und Felder prüfen.') }
     finally { setBusy(false) }
+  }
+
+  const uploadLogo = async (file: File) => {
+    if (!editor) return
+    if (!['image/png', 'image/webp', 'image/jpeg'].includes(file.type)) {
+      setLogoMessage('Bitte PNG, WebP oder JPEG auswählen.'); return
+    }
+    setLogoBusy(true); setLogoMessage('Logo wird geprüft und hochgeladen…')
+    try {
+      const uploaded = await uploadCustomLogo(file, editor.item.name || file.name.replace(/\.[^.]+$/, ''))
+      setEditor(current => current ? { ...current, item: { ...current.item, icon: uploaded.icon } } : current)
+      setLogoMessage('Logo hochgeladen und diesem Eintrag zugewiesen.')
+    } catch (caught) {
+      setLogoMessage(caught instanceof Error ? caught.message : 'Logo-Upload fehlgeschlagen.')
+    } finally { setLogoBusy(false) }
+  }
+
+  const submitInfrastructure = async (event: React.FormEvent) => {
+    event.preventDefault(); setInfrastructureBusy(true); setInfrastructureMessage('Verbindungen werden gespeichert und geprüft…')
+    const configured = {
+      ...infrastructureConfig,
+      storage_ids: storageIds.split(',').map(value => value.trim()).filter(Boolean),
+    }
+    try {
+      const result = await saveInfrastructure(configured, proxmoxSecret, pbsSecret)
+      setInfrastructureConfig(result.config); setStorageIds(result.config.storage_ids.join(', '))
+      setProxmoxSecret(''); setPbsSecret('')
+      const failures = [result.proxmox_error && `Proxmox: ${result.proxmox_error}`, result.pbs_error && `PBS: ${result.pbs_error}`].filter(Boolean)
+      setInfrastructureMessage(failures.length ? `Gespeichert · ${failures.join(' · ')}` : 'Gespeichert · Infrastrukturstatus erfolgreich aktualisiert.')
+      await onChanged()
+    } catch (caught) {
+      setInfrastructureMessage(caught instanceof Error ? caught.message : 'Infrastruktur-Konfiguration konnte nicht gespeichert werden.')
+    } finally { setInfrastructureBusy(false) }
   }
 
   const remove = async (kind: Kind, item: ManagedItem) => {
@@ -185,6 +237,7 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
       <label>Icon<select value={editor.item.icon} onChange={event => setEditor({ ...editor, item: { ...editor.item, icon: event.target.value } })}>{!iconOptions.includes(editor.item.icon) && <option value={editor.item.icon}>{editor.item.icon}</option>}{iconOptions.map(icon => <option key={icon}>{icon}</option>)}</select></label>
       <label className="wide">Beschreibung<input maxLength={180} value={editor.item.description} onChange={event => setEditor({ ...editor, item: { ...editor.item, description: event.target.value } })} /></label>
       <label className="wide">URL<input required={editor.kind === 'links' || editor.mode === 'add'} type="url" placeholder="https://service.example.com" value={editor.item.url} onChange={event => setEditor({ ...editor, item: { ...editor.item, url: event.target.value } })} /></label>
+      <label className="wide logo-upload"><span><Upload />Eigenes Logo <small>PNG, WebP oder JPEG · max. 3 MB · wird updatefest gespeichert</small></span><input type="file" accept="image/png,image/webp,image/jpeg" disabled={logoBusy} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadLogo(file); event.target.value = '' }} />{logoMessage && <em>{logoMessage}</em>}</label>
       {editor.kind === 'applications' && <label className="checkbox"><input type="checkbox" checked={Boolean(editor.item.favorite)} onChange={event => setEditor({ ...editor, item: { ...editor.item, favorite: event.target.checked } })} />Als Favorit markieren</label>}
     </div>
     <div className="form-actions"><button type="button" onClick={() => setEditor(null)}>Abbrechen</button><button className="primary" disabled={busy}>{busy ? 'Speichert…' : 'Speichern'}</button></div>
@@ -217,6 +270,41 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
           <label>Neuen PIN bestätigen<input required inputMode="numeric" autoComplete="new-password" pattern="[0-9]{4}" maxLength={4} value={confirmPin} onChange={event => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" /></label>
           <button className="primary" disabled={pinChangeBusy}>{pinChangeBusy ? 'Ändert…' : 'PIN ändern'}</button>
           {pinChangeMessage && <p>{pinChangeMessage}</p>}
+        </form>
+      </section>
+      <section className="settings-section infrastructure-settings">
+        <div className="settings-section-head"><h3><HardDrive />Infrastruktur</h3><span>Cluster, Speicher und Backupserver</span></div>
+        <form className="infrastructure-form" onSubmit={event => void submitInfrastructure(event)}>
+          <fieldset>
+            <legend><Server />Proxmox-Cluster</legend>
+            <div className="form-grid infra-grid">
+              <label className="wide">API-Adresse<input type="url" placeholder="https://proxmox.example.com:8006" value={infrastructureConfig.proxmox_host} onChange={event => setInfrastructureConfig({ ...infrastructureConfig, proxmox_host: event.target.value })} /></label>
+              <label>API-Benutzer<input placeholder="dashboard@pve" value={infrastructureConfig.proxmox_user} onChange={event => setInfrastructureConfig({ ...infrastructureConfig, proxmox_user: event.target.value })} /></label>
+              <label>Token-ID<input placeholder="homelab" value={infrastructureConfig.proxmox_token_name} onChange={event => setInfrastructureConfig({ ...infrastructureConfig, proxmox_token_name: event.target.value })} /></label>
+              <label className="wide">Token-Geheimnis<input type="password" autoComplete="new-password" placeholder={infrastructureConfig.proxmox_token_configured ? 'Gespeichert · leer lassen zum Beibehalten' : 'Token-Geheimnis'} value={proxmoxSecret} onChange={event => setProxmoxSecret(event.target.value)} /></label>
+              <label className="checkbox wide"><input type="checkbox" checked={infrastructureConfig.proxmox_verify_ssl} onChange={event => setInfrastructureConfig({ ...infrastructureConfig, proxmox_verify_ssl: event.target.checked })} />TLS-Zertifikat des Proxmox-Hosts prüfen</label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend><Database />Speicheranzeige</legend>
+            <div className="form-grid infra-grid">
+              <label>Quelle<select value={infrastructureConfig.storage_source} onChange={event => setInfrastructureConfig({ ...infrastructureConfig, storage_source: event.target.value as 'proxmox' | 'pbs' })}><option value="proxmox">Proxmox-Cluster</option><option value="pbs">PBS-Datastore</option></select></label>
+              <label>Proxmox-Speicher-IDs<input placeholder="local-lvm, qnap-nas" value={storageIds} onChange={event => setStorageIds(event.target.value)} /></label>
+              <p className="infra-hint wide">Leer zeigt alle verfügbaren Proxmox-Speicher. Bei Quelle „PBS“ wird der unten angegebene Datastore verwendet.</p>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend><Database />Proxmox Backup Server</legend>
+            <div className="form-grid infra-grid">
+              <label className="wide">API-Adresse<input type="url" placeholder="https://pbs.example.com:8007" value={infrastructureConfig.pbs_host} onChange={event => setInfrastructureConfig({ ...infrastructureConfig, pbs_host: event.target.value })} /></label>
+              <label>API-Benutzer<input placeholder="dashboard@pbs" value={infrastructureConfig.pbs_user} onChange={event => setInfrastructureConfig({ ...infrastructureConfig, pbs_user: event.target.value })} /></label>
+              <label>Token-ID<input placeholder="homelab" value={infrastructureConfig.pbs_token_name} onChange={event => setInfrastructureConfig({ ...infrastructureConfig, pbs_token_name: event.target.value })} /></label>
+              <label>Datastore<input placeholder="backup" value={infrastructureConfig.pbs_datastore} onChange={event => setInfrastructureConfig({ ...infrastructureConfig, pbs_datastore: event.target.value })} /></label>
+              <label>Token-Geheimnis<input type="password" autoComplete="new-password" placeholder={infrastructureConfig.pbs_token_configured ? 'Gespeichert · leer lassen zum Beibehalten' : 'Token-Geheimnis'} value={pbsSecret} onChange={event => setPbsSecret(event.target.value)} /></label>
+              <label className="checkbox wide"><input type="checkbox" checked={infrastructureConfig.pbs_verify_ssl} onChange={event => setInfrastructureConfig({ ...infrastructureConfig, pbs_verify_ssl: event.target.checked })} />TLS-Zertifikat des PBS prüfen</label>
+            </div>
+          </fieldset>
+          <div className="infrastructure-actions"><span>{infrastructureMessage}</span><button className="primary" disabled={infrastructureBusy}>{infrastructureBusy ? 'Prüft…' : 'Speichern & Verbindung prüfen'}</button></div>
         </form>
       </section>
       <section className="settings-section theme-settings">

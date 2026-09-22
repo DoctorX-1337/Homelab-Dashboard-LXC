@@ -21,17 +21,17 @@ Weitere Variablen: `CT_HOSTNAME`, `CORES`, `SWAP`, `DISK_SIZE`, `IP_CONFIG`, `TE
 
 Für eine bewusst nicht interaktive Bereitstellung kann zusätzlich `DASHBOARD_PIN=1234` gesetzt werden. Der Klartext-PIN wird weder protokolliert noch gespeichert; im privaten Datenbereich liegt nur ein mit PBKDF2-SHA256 gesalzener Hash. Nach zehn Fehlversuchen wird die PIN-Eingabe für fünf Minuten gebremst, eine erfolgreiche Sitzung läuft nach 30 Minuten ab. Der PIN kann später unter **Einstellungen → Einstellungen-PIN** geändert werden; danach ist eine neue Anmeldung erforderlich.
 
-Nach der Installation gibt das Skript die lokale IP-Adresse aus. Anwendungen, Hosts und Links werden unter **Einstellungen** hinzugefügt. Für Clusterwerte wird optional `/etc/homelab-dashboard.env` im Container mit einem dedizierten Proxmox-Token der Rolle `PVEAuditor` ergänzt.
+Nach der Installation gibt das Skript die lokale IP-Adresse aus. Anwendungen, Hosts und Links werden unter **Einstellungen** hinzugefügt. Unter **Einstellungen → Infrastruktur** lassen sich Proxmox-Cluster, anzuzeigende Proxmox-Speicher, Speicherquelle und Proxmox Backup Server ohne Konsolenzugriff konfigurieren und direkt prüfen. Verwende für Proxmox einen dedizierten Nur-Lese-Token (beispielsweise `PVEAuditor`) und für PBS einen auf den benötigten Datastore begrenzten `DatastoreAudit`-Token.
 
 Das vollständige Installationsprotokoll liegt auf dem Proxmox-Host unter `/var/log/homelab-dashboard-installer-<CTID>.log`. Bei einem Fehler zeigt der Installer automatisch die letzten relevanten Logzeilen an und lässt den Container für eine sichere Diagnose unverändert bestehen.
 
-Eigene, nicht öffentliche Logos werden updatefest unter `/opt/homelab-dashboard/data/logos/` abgelegt. Ein Icon `custom:mein-logo` verwendet dort `mein-logo.png`; persönliche Bilddateien und Namen müssen dadurch nicht ins öffentliche Repository aufgenommen werden.
+Eigene, nicht öffentliche Logos können beim Bearbeiten oder Anlegen eines Dienstes bzw. Links direkt hochgeladen werden. PNG, WebP und JPEG bis 3 MB werden geprüft, auf höchstens 512 × 512 Pixel verkleinert und updatefest als PNG unter `/opt/homelab-dashboard/data/logos/` abgelegt. Persönliche Bilddateien und Namen müssen dadurch nicht ins öffentliche Repository aufgenommen werden.
 
 ## Datenschutz und öffentliche Standardkonfiguration
 
 - `config/services.yaml` und `config/links.yaml` sind absichtlich leer.
 - Persönliche Anpassungen liegen ausschließlich in `/opt/homelab-dashboard/data/` und werden bei Updates nicht überschrieben.
-- Zugangsdaten liegen ausschließlich in `/etc/homelab-dashboard.env`.
+- Infrastruktur-Zugangsdaten liegen mit Dateimodus `0600` unter `/opt/homelab-dashboard/data/infrastructure.json`; bestehende Werte aus `/etc/homelab-dashboard.env` werden als sichere Startwerte unterstützt. Geheimnisse werden nie an den Browser zurückgegeben.
 - Produktivadressen, private DNS-Namen, RFC1918-Adressen, Freigabepfade und persönliche Links gehören niemals in das öffentliche Repository.
 - Die CI-Prüfung `scripts/check-public-content.py` blockiert typische private Netzwerkangaben.
 
@@ -53,7 +53,7 @@ journalctl -u homelab-dashboard-update.service
 
 ## Farbschemata
 
-Zehn gespeicherte Designs stehen zur Verfügung: Bunt, Blau (`#007BFF`), Grün (`#28A745`), Gelb (`#F4C001`), Rot (`#DC3545`), Schwarz (`#000000`), Violett (`#7B2CBF`), Cyan (`#00B8D4`), Orange (`#FF8C00`) und Pink (`#E83E8C`). Logo und Favicons behalten immer ihre Originalfarben.
+Zehn gespeicherte Designs stehen zur Verfügung: Bunt, Blau (`#007BFF`), Grün (`#28A745`), Gelb (`#F4C001`), Rot (`#DC3545`), Schwarz (`#000000`), Violett (`#7B2CBF`), Cyan (`#00B8D4`), Orange (`#FF8C00`) und Pink (`#E83E8C`). Schwarz ist bei Neuinstallationen vorausgewählt; bestehende Installationen behalten ihre Auswahl. Logo und Favicons behalten immer ihre Originalfarben.
 
 ## Manuelle Installation in einem vorhandenen Debian-LXC
 
@@ -93,4 +93,5 @@ npm run build
 - Host-Allowlist, URL-Validierung und Same-Origin-Schutz für Änderungen
 - gehärtete systemd-Dienste, Security-Header und Content Security Policy
 - keine API-Secrets im Frontend oder Repository
+- geprüfte, größenbegrenzte Logo-Konvertierung; private Logos verbleiben im persistenten Datenverzeichnis
 - Tests, Ruff, Bandit, `pip-audit`, npm-Audit und öffentlicher Inhaltscheck in CI

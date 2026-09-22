@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { Activity, Bot, Boxes, Cloud, CloudLightning, CloudRain, CloudSnow, CloudSun, Database, Download, ExternalLink, FileText, Gauge, Globe2, HardDrive, HeartPulse, Home, Image, LayoutDashboard, Link2, Music, Network, NotebookPen, PanelTop, Router, Server, Settings, ShieldCheck, Star, Sun, Tv, Wifi } from 'lucide-react'
+import { Activity, Bot, Boxes, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSnow, CloudSun, Database, Download, ExternalLink, FileText, Gauge, Globe2, HardDrive, HeartPulse, Home, Image, LayoutDashboard, Link2, Moon, Music, Network, NotebookPen, PanelTop, Router, Server, Settings, ShieldCheck, Star, Sun, Tv, Wifi } from 'lucide-react'
 
 const icons: Record<string, LucideIcon> = {
   activity: Activity, bot: Bot, boxes: Boxes, cloud: Cloud, database: Database, download: Download,
@@ -12,7 +12,8 @@ const icons: Record<string, LucideIcon> = {
   adguard: ShieldCheck, lokaleki: Bot, iventoy: Network, jdownloader: Download, lyrion: Music,
   backup: Database, certificate: ShieldCheck, monitoring: Gauge, notes: NotebookPen, pxe: Network,
   container: Boxes, vm: Server, storage: HardDrive, ai: Bot, github: Globe2,
-  sun: Sun, 'cloud-sun': CloudSun, rain: CloudRain, snow: CloudSnow, storm: CloudLightning,
+  sun: Sun, moon: Moon, 'cloud-sun': CloudSun, 'cloud-moon': CloudMoon,
+  fog: CloudFog, drizzle: CloudDrizzle, rain: CloudRain, snow: CloudSnow, storm: CloudLightning,
 }
 
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {

@@ -12,6 +12,8 @@ from app.models import DashboardEvent, Link, Resource, Service
 from app.services.custom_items import builtin_link_id, custom_items
 from app.services.health import check_url
 from app.services.icons import icon_for
+from app.services.infrastructure import infrastructure
+from app.services.pbs import PBSClient, PBSError
 from app.services.proxmox import ProxmoxClient
 from app.settings import settings
 
@@ -31,6 +33,8 @@ class DashboardState:
         self.last_success: datetime | None = None
         self.last_error: str | None = None
         self.latest_backup: dict | None = None
+        self.pbs_storage: dict[str, int] | None = None
+        self.pbs_error: str | None = None
         self._previous: dict[str, str] = {}
         self._task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
@@ -67,6 +71,7 @@ class DashboardState:
 
     async def refresh(self) -> None:
         async with self._lock:
+            infra = infrastructure.snapshot()
             config = load_dashboard_config()
             custom = custom_items.snapshot()
             app_overrides = {item.id: item for item in custom.app_overrides}
@@ -89,7 +94,7 @@ class DashboardState:
             self.links = visible_links
             self.managed_links = managed_links
             try:
-                resources = await self.proxmox.resources() if settings.api_configured else []
+                resources = await self.proxmox.resources() if infra.proxmox_configured else []
                 for resource in resources:
                     if resource.vmid is None:
                         continue
@@ -181,7 +186,19 @@ class DashboardState:
                         "favorite": service.favorite,
                     })
                 self.managed_apps = managed_apps
-                self.latest_backup = await self.proxmox.latest_backup() if settings.api_configured else None
+                self.latest_backup = None
+                self.pbs_storage = None
+                previous_pbs_error = self.pbs_error
+                self.pbs_error = None
+                if infra.pbs_configured:
+                    try:
+                        self.latest_backup, self.pbs_storage = await PBSClient(infra).status()
+                    except PBSError as exc:
+                        self.pbs_error = str(exc)[:240]
+                        if self.pbs_error != previous_pbs_error:
+                            self._event("warning", "PBS-API nicht erreichbar", self.pbs_error)
+                if self.latest_backup is None and infra.proxmox_configured:
+                    self.latest_backup = await self.proxmox.latest_backup()
                 self.last_success = datetime.now(timezone.utc)
                 self.last_error = None
             except Exception as exc:  # keep the last good cache available

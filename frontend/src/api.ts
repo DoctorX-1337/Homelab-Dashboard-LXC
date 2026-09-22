@@ -1,4 +1,4 @@
-import type { ApiStatus, AuthStatus, Cluster, DashboardEvent, EditableItem, Link, Resource, Service, SettingsItems, ThemeName, ThemePreference, UpdateStatus } from './types'
+import type { ApiStatus, AuthStatus, Cluster, DashboardEvent, EditableItem, InfrastructureConfig, InfrastructureResponse, Link, Resource, Service, SettingsItems, ThemeName, ThemePreference, UpdateStatus } from './types'
 
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(path, { headers: { Accept: 'application/json' } })
@@ -18,6 +18,44 @@ export const loadSettings = () => get<SettingsItems>('/api/settings/items')
 export const loadTheme = () => get<ThemePreference>('/api/settings/theme')
 export const loadUpdateStatus = () => get<UpdateStatus>('/api/update-status')
 export const loadAuthStatus = () => get<AuthStatus>('/api/auth/status')
+export const loadInfrastructure = () => get<InfrastructureResponse>('/api/settings/infrastructure')
+
+export async function saveInfrastructure(config: InfrastructureConfig, proxmoxSecret: string, pbsSecret: string) {
+  const response = await fetch('/api/settings/infrastructure', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Dashboard-Settings': '1' },
+    body: JSON.stringify({
+      ...config,
+      proxmox_token_secret: proxmoxSecret || null,
+      pbs_token_secret: pbsSecret || null,
+    }),
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { detail?: string } | null
+    throw new Error(payload?.detail || 'Infrastruktur-Konfiguration konnte nicht gespeichert werden')
+  }
+  return response.json() as Promise<InfrastructureResponse>
+}
+
+export async function uploadCustomLogo(file: File, name: string) {
+  if (file.size > 3_000_000) throw new Error('Das Logo darf höchstens 3 MB groß sein.')
+  const content = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Das Logo konnte nicht gelesen werden.'))
+    reader.onload = () => resolve(String(reader.result).split(',', 2)[1] || '')
+    reader.readAsDataURL(file)
+  })
+  const response = await fetch('/api/settings/logos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Dashboard-Settings': '1' },
+    body: JSON.stringify({ name: name || file.name.replace(/\.[^.]+$/, ''), content_base64: content }),
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { detail?: string } | null
+    throw new Error(payload?.detail || 'Das Logo konnte nicht hochgeladen werden')
+  }
+  return response.json() as Promise<{ icon: string; filename: string }>
+}
 
 export async function unlockSettings(pin: string) {
   const response = await fetch('/api/auth/pin', {

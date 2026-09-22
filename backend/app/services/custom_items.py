@@ -20,7 +20,7 @@ ThemeName = Literal[
 
 
 class ThemePreference(BaseModel):
-    theme: ThemeName = "green"
+    theme: ThemeName = "black"
 
 
 def builtin_link_id(name: str, url: str) -> str:
@@ -67,7 +67,7 @@ class StoredItem(EditableItem):
 
 
 class CustomItems(BaseModel):
-    theme: ThemeName = "green"
+    theme: ThemeName = "black"
     hosts: list[StoredItem] = Field(default_factory=list)
     links: list[StoredItem] = Field(default_factory=list)
     app_overrides: list[StoredItem] = Field(default_factory=list)

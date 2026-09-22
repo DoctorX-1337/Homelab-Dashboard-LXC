@@ -32,6 +32,22 @@ export type Link = { name: string; description: string; icon: string; url: strin
 export type ThemeName = 'multicolor' | 'blue' | 'green' | 'yellow' | 'red' | 'black' | 'purple' | 'cyan' | 'orange' | 'pink'
 export type ThemePreference = { theme: ThemeName }
 export type AuthStatus = { configured: boolean; authenticated: boolean }
+export type InfrastructureConfig = {
+  proxmox_host: string
+  proxmox_user: string
+  proxmox_token_name: string
+  proxmox_token_configured: boolean
+  proxmox_verify_ssl: boolean
+  storage_source: 'proxmox' | 'pbs'
+  storage_ids: string[]
+  pbs_host: string
+  pbs_user: string
+  pbs_token_name: string
+  pbs_token_configured: boolean
+  pbs_datastore: string
+  pbs_verify_ssl: boolean
+}
+export type InfrastructureResponse = { config: InfrastructureConfig; proxmox_error: string | null; pbs_error: string | null }
 export type UpdateStatus = {
   current_version: string
   latest_version: string | null
@@ -58,5 +74,7 @@ export type Cluster = {
 export type ApiStatus = {
   ok: boolean; api_configured: boolean; last_refresh: string | null; last_success: string | null
   error: string | null; refresh_interval: number; dashboard_name: string; dashboard_subtitle: string
-  verify_ssl: boolean; latest_backup: Record<string, unknown> | null
+  verify_ssl: boolean; backup_configured: boolean; pbs_configured: boolean; pbs_error: string | null
+  storage_source: 'proxmox' | 'pbs'
+  latest_backup: Record<string, unknown> | null
 }

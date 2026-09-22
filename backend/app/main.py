@@ -3,6 +3,10 @@ from __future__ import annotations
 import os
 import re
 import time
+import base64
+import binascii
+import io
+import unicodedata
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -13,10 +17,12 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from PIL import Image, UnidentifiedImageError
 
 from app.security import create_session, hash_pin, pin_is_configured, verify_pin, verify_session
 from app.services.dashboard import state
 from app.services.custom_items import EditableItem, ThemePreference, custom_items
+from app.services.infrastructure import InfrastructureUpdate, infrastructure
 from app.services.updates import read_installation_state, update_checker, write_installation_state
 from app.settings import settings
 
@@ -34,6 +40,11 @@ class PinLogin(BaseModel):
 class PinChange(BaseModel):
     current_pin: str
     new_pin: str
+
+
+class LogoUpload(BaseModel):
+    name: str
+    content_base64: str
 
 
 @asynccontextmanager
@@ -57,6 +68,7 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_ho
 
 @app.get("/api/status")
 async def api_status():
+    infra = infrastructure.snapshot()
     return {
         "ok": state.last_error is None,
         "api_configured": settings.api_configured,
@@ -67,6 +79,10 @@ async def api_status():
         "dashboard_name": settings.dashboard_name,
         "dashboard_subtitle": settings.dashboard_subtitle,
         "verify_ssl": settings.proxmox_verify_ssl,
+        "backup_configured": infra.pbs_configured or infra.proxmox_configured,
+        "pbs_configured": infra.pbs_configured,
+        "pbs_error": state.pbs_error,
+        "storage_source": infra.storage_source,
         "latest_backup": state.latest_backup,
     }
 
@@ -81,12 +97,62 @@ async def api_custom_logo(logo_name: str):
     return FileResponse(logo_path)
 
 
+@app.post("/api/settings/logos")
+async def api_settings_logo_upload(payload: LogoUpload, request: Request):
+    require_settings_request(request)
+    if len(payload.content_base64) > 4_200_000:
+        raise HTTPException(status_code=413, detail="Das Logo darf höchstens 3 MB groß sein")
+    try:
+        raw = base64.b64decode(payload.content_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="Ungültige Bilddaten") from exc
+    if not raw or len(raw) > 3_000_000:
+        raise HTTPException(status_code=413, detail="Das Logo darf höchstens 3 MB groß sein")
+    try:
+        with Image.open(io.BytesIO(raw)) as uploaded:
+            if uploaded.format not in {"PNG", "WEBP", "JPEG"}:
+                raise HTTPException(status_code=422, detail="Nur PNG, WebP und JPEG sind zulässig")
+            if uploaded.width > 4096 or uploaded.height > 4096 or uploaded.width * uploaded.height > 16_000_000:
+                raise HTTPException(status_code=422, detail="Das Logo darf maximal 4096 × 4096 Pixel groß sein")
+            uploaded.seek(0)
+            image = uploaded.convert("RGBA")
+            image.thumbnail((512, 512), Image.Resampling.LANCZOS)
+            output = io.BytesIO()
+            image.save(output, format="PNG", optimize=True)
+    except (UnidentifiedImageError, OSError) as exc:
+        raise HTTPException(status_code=422, detail="Die Datei ist kein gültiges Bild") from exc
+
+    normalized = unicodedata.normalize("NFKD", payload.name).encode("ascii", "ignore").decode().lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")[:64] or "logo"
+    CUSTOM_LOGO_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    destination = CUSTOM_LOGO_DIRECTORY / f"{slug}.png"
+    temporary = destination.with_suffix(".tmp")
+    try:
+        temporary.write_bytes(output.getvalue())
+        os.chmod(temporary, 0o640)
+        os.replace(temporary, destination)
+    except OSError as exc:
+        temporary.unlink(missing_ok=True)
+        raise HTTPException(status_code=503, detail="Das Logo konnte nicht gespeichert werden") from exc
+    return {"icon": f"custom:{slug}", "filename": destination.name}
+
+
 @app.get("/api/cluster")
 async def api_cluster():
+    infra = infrastructure.snapshot()
     resources = state.resources
     nodes = [item for item in resources if item.type == "node"]
     guests = [item for item in resources if item.type in {"lxc", "qemu"}]
-    storages = [item for item in resources if item.type == "storage"]
+    storages = [
+        item for item in resources
+        if item.type == "storage" and (not infra.storage_ids or item.name in infra.storage_ids)
+    ]
+    if infra.storage_source == "pbs":
+        storage_used = state.pbs_storage["used"] if state.pbs_storage else 0
+        storage_total = state.pbs_storage["total"] if state.pbs_storage else 0
+    else:
+        storage_used = sum(item.disk.used for item in storages if item.status == "available")
+        storage_total = sum(item.disk.total for item in storages if item.status == "available")
     return {
         "nodes": len(nodes),
         "containers": sum(item.type == "lxc" for item in guests),
@@ -97,8 +163,8 @@ async def api_cluster():
         "cpu": sum(item.cpu for item in nodes) / max(len(nodes), 1),
         "memory_used": sum(item.memory.used for item in nodes),
         "memory_total": sum(item.memory.total for item in nodes),
-        "storage_used": sum(item.disk.used for item in storages if item.status == "available"),
-        "storage_total": sum(item.disk.total for item in storages if item.status == "available"),
+        "storage_used": storage_used,
+        "storage_total": storage_total,
     }
 
 
@@ -147,6 +213,11 @@ async def api_update_status():
 
 def require_settings_request(request: Request) -> None:
     require_same_origin(request)
+    if not verify_session(request.cookies.get(SESSION_COOKIE)):
+        raise HTTPException(status_code=401, detail="Einstellungen sind gesperrt")
+
+
+def require_settings_session(request: Request) -> None:
     if not verify_session(request.cookies.get(SESSION_COOKIE)):
         raise HTTPException(status_code=401, detail="Einstellungen sind gesperrt")
 
@@ -248,6 +319,31 @@ async def api_update(request: Request):
 @app.get("/api/settings/items")
 async def api_settings_items():
     return {"applications": state.managed_apps, "links": state.managed_links}
+
+
+@app.get("/api/settings/infrastructure")
+async def api_settings_infrastructure(request: Request):
+    require_settings_session(request)
+    return {
+        "config": infrastructure.public(),
+        "proxmox_error": state.last_error,
+        "pbs_error": state.pbs_error,
+    }
+
+
+@app.put("/api/settings/infrastructure")
+async def api_settings_infrastructure_update(payload: InfrastructureUpdate, request: Request):
+    require_settings_request(request)
+    try:
+        configured = infrastructure.update(payload)
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail="Infrastruktur-Konfiguration konnte nicht gespeichert werden") from exc
+    await state.refresh()
+    return {
+        "config": configured,
+        "proxmox_error": state.last_error,
+        "pbs_error": state.pbs_error,
+    }
 
 
 @app.get("/api/settings/theme")

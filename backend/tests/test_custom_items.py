@@ -57,11 +57,11 @@ def test_builtin_override_can_be_hidden_and_restored(tmp_path):
     assert restored.app_overrides[0].name == "Jellyfin Neu"
 
 
-def test_theme_defaults_to_green_and_persists(tmp_path):
+def test_theme_defaults_to_black_and_persists(tmp_path):
     store = CustomItemsStore()
     store.path = tmp_path / "custom-items.json"
 
-    assert store.snapshot().theme == "green"
+    assert store.snapshot().theme == "black"
     assert store.set_theme("purple").theme == "purple"
     assert store.snapshot().theme == "purple"
     assert store.set_theme("multicolor").theme == "multicolor"

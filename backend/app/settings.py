@@ -6,6 +6,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from app.services.infrastructure import infrastructure
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(BASE_DIR / "backend" / ".env")
 
@@ -27,11 +29,6 @@ def _int(name: str, default: int, minimum: int, maximum: int) -> int:
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    proxmox_host: str = os.getenv("PROXMOX_HOST", "").rstrip("/")
-    proxmox_user: str = os.getenv("PROXMOX_USER", "")
-    proxmox_token_name: str = os.getenv("PROXMOX_TOKEN_NAME", "")
-    proxmox_token_secret: str = os.getenv("PROXMOX_TOKEN_SECRET", "")
-    proxmox_verify_ssl: bool = _bool("PROXMOX_VERIFY_SSL", True)
     refresh_interval: int = _int("REFRESH_INTERVAL", 30, 10, 3600)
     health_timeout: int = _int("HEALTH_TIMEOUT", 5, 1, 15)
     app_host: str = os.getenv("APP_HOST", "127.0.0.1")
@@ -40,6 +37,26 @@ class Settings:
     dashboard_subtitle: str = os.getenv(
         "DASHBOARD_SUBTITLE", "Meine Infrastruktur. Meine Freiheit."
     )
+
+    @property
+    def proxmox_host(self) -> str:
+        return infrastructure.snapshot().proxmox_host
+
+    @property
+    def proxmox_user(self) -> str:
+        return infrastructure.snapshot().proxmox_user
+
+    @property
+    def proxmox_token_name(self) -> str:
+        return infrastructure.snapshot().proxmox_token_name
+
+    @property
+    def proxmox_token_secret(self) -> str:
+        return infrastructure.snapshot().proxmox_token_secret
+
+    @property
+    def proxmox_verify_ssl(self) -> bool:
+        return infrastructure.snapshot().proxmox_verify_ssl
     allowed_hosts: tuple[str, ...] = tuple(
         item.strip()
         for item in os.getenv(
@@ -51,14 +68,7 @@ class Settings:
 
     @property
     def api_configured(self) -> bool:
-        return all(
-            (
-                self.proxmox_host,
-                self.proxmox_user,
-                self.proxmox_token_name,
-                self.proxmox_token_secret,
-            )
-        )
+        return infrastructure.snapshot().proxmox_configured
 
 
 settings = Settings()
