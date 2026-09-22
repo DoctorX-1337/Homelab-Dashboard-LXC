@@ -23,6 +23,8 @@ Für eine bewusst nicht interaktive Bereitstellung kann zusätzlich `DASHBOARD_P
 
 Nach der Installation gibt das Skript die lokale IP-Adresse aus. Anwendungen, Hosts und Links werden unter **Einstellungen** hinzugefügt. Unter **Einstellungen → Infrastruktur** lassen sich Proxmox-Cluster, anzuzeigende Proxmox-Speicher, Speicherquelle und Proxmox Backup Server ohne Konsolenzugriff konfigurieren und direkt prüfen. Verwende für Proxmox einen dedizierten Nur-Lese-Token (beispielsweise `PVEAuditor`) und für PBS einen auf den benötigten Datastore begrenzten `DatastoreAudit`-Token.
 
+Unter **Einstellungen → Texte & Branding** können Dashboard-Titel, Beschreibung, Footer-Titel, Footer-Text und Browser-Tab-Titel unabhängig voneinander angepasst werden. Die Werte liegen gemeinsam mit den übrigen persönlichen Dashboard-Einstellungen updatefest unter `/opt/homelab-dashboard/data/`.
+
 Das vollständige Installationsprotokoll liegt auf dem Proxmox-Host unter `/var/log/homelab-dashboard-installer-<CTID>.log`. Bei einem Fehler zeigt der Installer automatisch die letzten relevanten Logzeilen an und lässt den Container für eine sichere Diagnose unverändert bestehen.
 
 Eigene, nicht öffentliche Logos können beim Bearbeiten oder Anlegen eines Dienstes bzw. Links direkt hochgeladen werden. PNG, WebP und JPEG bis 3 MB werden geprüft, auf höchstens 512 × 512 Pixel verkleinert und updatefest als PNG unter `/opt/homelab-dashboard/data/logos/` abgelegt. Persönliche Bilddateien und Namen müssen dadurch nicht ins öffentliche Repository aufgenommen werden.

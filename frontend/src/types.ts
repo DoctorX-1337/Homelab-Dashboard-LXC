@@ -31,6 +31,13 @@ export type Service = {
 export type Link = { name: string; description: string; icon: string; url: string }
 export type ThemeName = 'multicolor' | 'blue' | 'green' | 'yellow' | 'red' | 'black' | 'purple' | 'cyan' | 'orange' | 'pink'
 export type ThemePreference = { theme: ThemeName }
+export type BrandingSettings = {
+  dashboard_title: string
+  dashboard_subtitle: string
+  footer_title: string
+  footer_text: string
+  browser_title: string
+}
 export type AuthStatus = { configured: boolean; authenticated: boolean }
 export type InfrastructureConfig = {
   proxmox_host: string
@@ -74,6 +81,7 @@ export type Cluster = {
 export type ApiStatus = {
   ok: boolean; api_configured: boolean; last_refresh: string | null; last_success: string | null
   error: string | null; refresh_interval: number; dashboard_name: string; dashboard_subtitle: string
+  footer_title: string; footer_text: string; browser_title: string
   verify_ssl: boolean; backup_configured: boolean; pbs_configured: boolean; pbs_error: string | null
   storage_source: 'proxmox' | 'pbs'
   latest_backup: Record<string, unknown> | null

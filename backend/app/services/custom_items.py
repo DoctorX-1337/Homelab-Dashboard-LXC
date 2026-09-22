@@ -23,6 +23,27 @@ class ThemePreference(BaseModel):
     theme: ThemeName = "black"
 
 
+class BrandingPreference(BaseModel):
+    dashboard_title: str = Field(default="HomeLab Dashboard", min_length=1, max_length=80)
+    dashboard_subtitle: str = Field(default="Meine Infrastruktur. Meine Freiheit.", max_length=160)
+    footer_title: str = Field(default="HomeLab Dashboard", min_length=1, max_length=80)
+    footer_text: str = Field(default="Dein Dashboard. Deine Konfiguration.", max_length=160)
+    browser_title: str = Field(default="HomeLab Dashboard", min_length=1, max_length=80)
+
+    @field_validator("dashboard_title", "footer_title", "browser_title")
+    @classmethod
+    def clean_required_branding_text(cls, value: str) -> str:
+        cleaned = " ".join(value.strip().split())
+        if not cleaned:
+            raise ValueError("Titel dürfen nicht leer sein")
+        return cleaned
+
+    @field_validator("dashboard_subtitle", "footer_text")
+    @classmethod
+    def clean_optional_branding_text(cls, value: str) -> str:
+        return " ".join(value.strip().split())
+
+
 def builtin_link_id(name: str, url: str) -> str:
     digest = hashlib.sha256(f"{name}\0{url}".encode()).hexdigest()[:16]
     return f"builtin-link-{digest}"
@@ -68,6 +89,7 @@ class StoredItem(EditableItem):
 
 class CustomItems(BaseModel):
     theme: ThemeName = "black"
+    branding: BrandingPreference = Field(default_factory=BrandingPreference)
     hosts: list[StoredItem] = Field(default_factory=list)
     links: list[StoredItem] = Field(default_factory=list)
     app_overrides: list[StoredItem] = Field(default_factory=list)
@@ -116,6 +138,13 @@ class CustomItemsStore:
             data.theme = theme
             self._write(data)
             return ThemePreference(theme=theme)
+
+    def set_branding(self, branding: BrandingPreference) -> BrandingPreference:
+        with self._lock:
+            data = self.snapshot()
+            data.branding = branding
+            self._write(data)
+            return branding
 
     def delete(self, kind: Literal["hosts", "links"], item_id: str) -> None:
         with self._lock:

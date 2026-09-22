@@ -111,6 +111,7 @@ function App() {
   useEffect(() => { void refresh(); const timer = window.setInterval(() => void refresh(), 30_000); return () => window.clearInterval(timer) }, [refresh])
   useEffect(() => { void loadTheme().then(value => setTheme(value.theme)).catch(() => undefined) }, [])
   useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
+  useEffect(() => { document.title = status?.browser_title || 'HomeLab Dashboard' }, [status?.browser_title])
   useEffect(() => {
     const check = () => void loadUpdateStatus().then(value => {
       setUpdateStatus(value)
@@ -167,6 +168,8 @@ function App() {
   const backupLabel = !status?.backup_configured ? 'Nicht eingerichtet' : backupTime ? backupTime.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : 'Bereit'
   const dashboardTitle = status?.dashboard_name || 'HomeLab Dashboard'
   const dashboardSubtitle = status?.dashboard_subtitle || 'Deine Dienste auf einen Blick'
+  const footerTitle = status?.footer_title || dashboardTitle
+  const footerText = status?.footer_text || 'Dein Dashboard. Deine Konfiguration.'
 
   return <div className={`dashboard ${updateLocked ? 'update-locked' : ''}`}>
     {updateStatus?.update_available && <aside className="update-banner">
@@ -198,7 +201,7 @@ function App() {
       </section>
     </main>
 
-    <footer><div><span className="home-mark"><img src="/favicon/favicon-32x32.png" alt="" /></span><strong>{dashboardTitle}</strong><span className="footer-version">v{updateStatus?.current_version ?? '…'}</span><i /><span>Dein Dashboard. Deine Konfiguration.</span></div><nav><button className="settings-trigger" onClick={() => setSettingsOpen(true)}><Settings />Einstellungen</button></nav></footer>
+    <footer><div><span className="home-mark"><img src="/favicon/favicon-32x32.png" alt="" /></span><strong>{footerTitle}</strong><span className="footer-version">v{updateStatus?.current_version ?? '…'}</span><i /><span>{footerText}</span></div><nav><button className="settings-trigger" onClick={() => setSettingsOpen(true)}><Settings />Einstellungen</button></nav></footer>
     {settingsOpen && <SettingsModal theme={theme} updateStatus={updateStatus} onThemeChanged={setTheme} onUpdateActivityChange={handleUpdateActivity} onClose={() => { if (!updateLocked) setSettingsOpen(false) }} onChanged={refresh} />}
   </div>
 }

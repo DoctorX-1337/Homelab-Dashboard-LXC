@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.services.custom_items import CustomItemsStore, EditableItem, ThemePreference
+from app.services.custom_items import BrandingPreference, CustomItemsStore, EditableItem, ThemePreference
 
 
 def test_custom_items_roundtrip(tmp_path):
@@ -69,3 +69,21 @@ def test_theme_defaults_to_black_and_persists(tmp_path):
 
     with pytest.raises(ValidationError):
         ThemePreference(theme="invalid")
+
+
+def test_branding_defaults_can_be_changed_and_are_cleaned(tmp_path):
+    store = CustomItemsStore()
+    store.path = tmp_path / "custom-items.json"
+
+    assert store.snapshot().branding.footer_text == "Dein Dashboard. Deine Konfiguration."
+    changed = store.set_branding(BrandingPreference(
+        dashboard_title="  Mein   HomeLab  ",
+        dashboard_subtitle="Alles auf einen Blick",
+        footer_title="Startseite",
+        footer_text="Mein Netzwerk",
+        browser_title="HomeLab Startseite",
+    ))
+    assert changed.dashboard_title == "Mein HomeLab"
+    assert store.snapshot().branding.browser_title == "HomeLab Startseite"
+    with pytest.raises(ValidationError):
+        BrandingPreference(dashboard_title="   ")

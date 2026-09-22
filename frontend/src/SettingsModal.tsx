@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
-import { Database, Download, ExternalLink, GitBranch, HardDrive, Link2, LockKeyhole, Palette, Pencil, Plus, RotateCcw, Server, Trash2, Upload, X } from 'lucide-react'
-import { addSetting, changeSettingsPin, deleteSetting, installUpdate, loadAuthStatus, loadInfrastructure, loadSettings, loadUpdateStatus, saveInfrastructure, unlockSettings, updateSetting, updateTheme, uploadCustomLogo } from './api'
-import type { EditableItem, InfrastructureConfig, ManagedItem, SettingsItems, ThemeName, UpdateStatus } from './types'
+import { Database, Download, ExternalLink, GitBranch, HardDrive, Link2, LockKeyhole, Palette, Pencil, Plus, RotateCcw, Server, Trash2, Type, Upload, X } from 'lucide-react'
+import { addSetting, changeSettingsPin, deleteSetting, installUpdate, loadAuthStatus, loadBranding, loadInfrastructure, loadSettings, loadUpdateStatus, saveInfrastructure, unlockSettings, updateBranding, updateSetting, updateTheme, uploadCustomLogo } from './api'
+import type { BrandingSettings, EditableItem, InfrastructureConfig, ManagedItem, SettingsItems, ThemeName, UpdateStatus } from './types'
 
 type Kind = 'applications' | 'links'
 type Editor = { kind: Kind; mode: 'add' | 'edit'; item: EditableItem }
@@ -11,6 +11,11 @@ const emptyInfrastructure: InfrastructureConfig = {
   proxmox_host: '', proxmox_user: '', proxmox_token_name: '', proxmox_token_configured: false,
   proxmox_verify_ssl: true, storage_source: 'proxmox', storage_ids: [], pbs_host: '', pbs_user: '',
   pbs_token_name: '', pbs_token_configured: false, pbs_datastore: '', pbs_verify_ssl: true,
+}
+const defaultBranding: BrandingSettings = {
+  dashboard_title: 'HomeLab Dashboard', dashboard_subtitle: 'Meine Infrastruktur. Meine Freiheit.',
+  footer_title: 'HomeLab Dashboard', footer_text: 'Dein Dashboard. Deine Konfiguration.',
+  browser_title: 'HomeLab Dashboard',
 }
 const blank = (kind: Kind): EditableItem => ({
   name: '', description: '', icon: kind === 'applications' ? 'server' : 'link', url: '', favorite: false,
@@ -62,14 +67,18 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
   const [infrastructureMessage, setInfrastructureMessage] = useState('')
   const [logoBusy, setLogoBusy] = useState(false)
   const [logoMessage, setLogoMessage] = useState('')
+  const [branding, setBranding] = useState<BrandingSettings>(defaultBranding)
+  const [brandingBusy, setBrandingBusy] = useState(false)
+  const [brandingMessage, setBrandingMessage] = useState('')
   const updateActive = Boolean(installation && activeUpdateStatuses.has(installation.status))
 
   const reload = async () => {
     try {
-      const [nextItems, infrastructure] = await Promise.all([loadSettings(), loadInfrastructure()])
+      const [nextItems, infrastructure, nextBranding] = await Promise.all([loadSettings(), loadInfrastructure(), loadBranding()])
       setItems(nextItems)
       setInfrastructureConfig(infrastructure.config)
       setStorageIds(infrastructure.config.storage_ids.join(', '))
+      setBranding(nextBranding)
       setError('')
     }
     catch { setError('Die Einstellungen konnten nicht geladen werden.') }
@@ -157,6 +166,17 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
     } catch (caught) {
       setInfrastructureMessage(caught instanceof Error ? caught.message : 'Infrastruktur-Konfiguration konnte nicht gespeichert werden.')
     } finally { setInfrastructureBusy(false) }
+  }
+
+  const submitBranding = async (event: React.FormEvent) => {
+    event.preventDefault(); setBrandingBusy(true); setBrandingMessage('')
+    try {
+      const saved = await updateBranding(branding)
+      setBranding(saved); setBrandingMessage('Texte wurden gespeichert.')
+      await onChanged()
+    } catch (caught) {
+      setBrandingMessage(caught instanceof Error ? caught.message : 'Texte konnten nicht gespeichert werden.')
+    } finally { setBrandingBusy(false) }
   }
 
   const remove = async (kind: Kind, item: ManagedItem) => {
@@ -305,6 +325,17 @@ export function SettingsModal({ theme, updateStatus, onThemeChanged, onUpdateAct
             </div>
           </fieldset>
           <div className="infrastructure-actions"><span>{infrastructureMessage}</span><button className="primary" disabled={infrastructureBusy}>{infrastructureBusy ? 'Prüft…' : 'Speichern & Verbindung prüfen'}</button></div>
+        </form>
+      </section>
+      <section className="settings-section branding-settings">
+        <div className="settings-section-head"><h3><Type />Texte &amp; Branding</h3><span>Kopfzeile, Footer und Browser-Tab</span></div>
+        <form className="branding-form form-grid" onSubmit={event => void submitBranding(event)}>
+          <label>Dashboard-Titel<input required maxLength={80} value={branding.dashboard_title} onChange={event => setBranding({ ...branding, dashboard_title: event.target.value })} /></label>
+          <label>Browser-Tab-Titel<input required maxLength={80} value={branding.browser_title} onChange={event => setBranding({ ...branding, browser_title: event.target.value })} /></label>
+          <label className="wide">Beschreibung unter dem Dashboard-Titel<input maxLength={160} value={branding.dashboard_subtitle} onChange={event => setBranding({ ...branding, dashboard_subtitle: event.target.value })} /></label>
+          <label>Footer-Titel<input required maxLength={80} value={branding.footer_title} onChange={event => setBranding({ ...branding, footer_title: event.target.value })} /></label>
+          <label>Footer-Text<input maxLength={160} value={branding.footer_text} onChange={event => setBranding({ ...branding, footer_text: event.target.value })} /></label>
+          <div className="branding-actions wide"><span>{brandingMessage}</span><button className="primary" disabled={brandingBusy}>{brandingBusy ? 'Speichert…' : 'Texte speichern'}</button></div>
         </form>
       </section>
       <section className="settings-section theme-settings">

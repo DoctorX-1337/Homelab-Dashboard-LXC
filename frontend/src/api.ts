@@ -1,4 +1,4 @@
-import type { ApiStatus, AuthStatus, Cluster, DashboardEvent, EditableItem, InfrastructureConfig, InfrastructureResponse, Link, Resource, Service, SettingsItems, ThemeName, ThemePreference, UpdateStatus } from './types'
+import type { ApiStatus, AuthStatus, BrandingSettings, Cluster, DashboardEvent, EditableItem, InfrastructureConfig, InfrastructureResponse, Link, Resource, Service, SettingsItems, ThemeName, ThemePreference, UpdateStatus } from './types'
 
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(path, { headers: { Accept: 'application/json' } })
@@ -18,6 +18,7 @@ export const loadSettings = () => get<SettingsItems>('/api/settings/items')
 export const loadTheme = () => get<ThemePreference>('/api/settings/theme')
 export const loadUpdateStatus = () => get<UpdateStatus>('/api/update-status')
 export const loadAuthStatus = () => get<AuthStatus>('/api/auth/status')
+export const loadBranding = () => get<BrandingSettings>('/api/settings/branding')
 export const loadInfrastructure = () => get<InfrastructureResponse>('/api/settings/infrastructure')
 
 export async function saveInfrastructure(config: InfrastructureConfig, proxmoxSecret: string, pbsSecret: string) {
@@ -100,6 +101,19 @@ export async function updateTheme(theme: ThemeName) {
   })
   if (!response.ok) throw new Error(await response.text())
   return response.json() as Promise<ThemePreference>
+}
+
+export async function updateBranding(branding: BrandingSettings) {
+  const response = await fetch('/api/settings/branding', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Dashboard-Settings': '1' },
+    body: JSON.stringify(branding),
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { detail?: string } | null
+    throw new Error(payload?.detail || 'Texte konnten nicht gespeichert werden')
+  }
+  return response.json() as Promise<BrandingSettings>
 }
 
 const settingsPayload = (item: EditableItem) => ({

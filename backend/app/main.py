@@ -21,7 +21,7 @@ from PIL import Image, UnidentifiedImageError
 
 from app.security import create_session, hash_pin, pin_is_configured, verify_pin, verify_session
 from app.services.dashboard import state
-from app.services.custom_items import EditableItem, ThemePreference, custom_items
+from app.services.custom_items import BrandingPreference, EditableItem, ThemePreference, custom_items
 from app.services.infrastructure import InfrastructureUpdate, infrastructure
 from app.services.updates import read_installation_state, update_checker, write_installation_state
 from app.settings import settings
@@ -69,6 +69,7 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_ho
 @app.get("/api/status")
 async def api_status():
     infra = infrastructure.snapshot()
+    branding = custom_items.snapshot().branding
     return {
         "ok": state.last_error is None,
         "api_configured": settings.api_configured,
@@ -76,8 +77,11 @@ async def api_status():
         "last_success": state.last_success,
         "error": state.last_error,
         "refresh_interval": settings.refresh_interval,
-        "dashboard_name": settings.dashboard_name,
-        "dashboard_subtitle": settings.dashboard_subtitle,
+        "dashboard_name": branding.dashboard_title,
+        "dashboard_subtitle": branding.dashboard_subtitle,
+        "footer_title": branding.footer_title,
+        "footer_text": branding.footer_text,
+        "browser_title": branding.browser_title,
         "verify_ssl": settings.proxmox_verify_ssl,
         "backup_configured": infra.pbs_configured or infra.proxmox_configured,
         "pbs_configured": infra.pbs_configured,
@@ -355,6 +359,18 @@ async def api_settings_theme():
 async def api_settings_theme_update(payload: ThemePreference, request: Request):
     require_settings_request(request)
     return custom_items.set_theme(payload.theme)
+
+
+@app.get("/api/settings/branding")
+async def api_settings_branding(request: Request):
+    require_settings_session(request)
+    return custom_items.snapshot().branding
+
+
+@app.put("/api/settings/branding")
+async def api_settings_branding_update(payload: BrandingPreference, request: Request):
+    require_settings_request(request)
+    return custom_items.set_branding(payload)
 
 
 @app.post("/api/settings/{kind}")
